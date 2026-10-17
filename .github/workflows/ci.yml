@@ -26,6 +26,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # Dogfood: this repo's agent files are generated from .context/rules and linted by ctx-lint.
+      - run: pnpm build
+      - run: node dist/cli.js check --format github
+      - run: node dist/cli.js sync --check
+      - run: node dist/cli.js audit
 
   test:
     name: Test (${{ matrix.os }}, Node ${{ matrix.node }})

@@ -35,9 +35,12 @@ export const pathExists: LintRule = {
     // Missing but gitignored (`.env.local`, `out/`): a local or generated file, not rot.
     if (resolution.tried.some((p) => files.wouldBeIgnored(p, ref.isDir ? 'dir' : 'file'))) return;
 
-    const suggestion = suggestPath(ref, files, ctx.fileDir);
+    const suggestion = suggestPath(ref, files, ctx.fileDir, ctx.manifests.renames);
     const shown = suggestion.paths.map((p) => displayPath(ref, p, ctx.fileDir));
-    const hint = shown.length > 0 ? ` Did you mean ${orList(shown)}?` : '';
+    const question = suggestion.renamedIn
+      ? `It was renamed to ${orList(shown)} in ${suggestion.renamedIn}.`
+      : `Did you mean ${orList(shown)}?`;
+    const hint = shown.length > 0 ? ` ${question}` : '';
     const only = suggestion.paths[0];
     const replacement =
       suggestion.fixable && only !== undefined
@@ -50,7 +53,7 @@ export const pathExists: LintRule = {
       ...(suggestion.paths.length > 0
         ? {
             suggestion: {
-              message: `Did you mean ${orList(shown)}?`,
+              message: question,
               ...(replacement !== null ? { replacement } : {}),
             },
           }

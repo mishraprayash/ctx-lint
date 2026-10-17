@@ -2,9 +2,13 @@ import { builtinModules } from 'node:module';
 import type { Candidate, IgnoreReason } from '../../core/references.js';
 import type { Confidence } from '../../core/types.js';
 import {
+  ARTICLES,
+  CUE_PHRASES,
+  IMPERATIVE_LEADS,
   NEGATION_AFTER,
   NEGATION_BEFORE,
   NON_PACKAGE_NOUNS,
+  PACKAGE_NOUNS,
   PACKAGE_STOPLIST,
   STRONG_PACKAGE_CUES,
   WEAK_PACKAGE_CUES,
@@ -51,21 +55,36 @@ export function classifyPackageToken(token: string, candidate: Candidate): Packa
   const beforeWords = words(before);
   const afterWords = words(after);
 
-  // "`camel` case", "the `strict` mode": a concept, not a library.
-  if (afterWords[0] !== undefined && NON_PACKAGE_NOUNS.has(afterWords[0])) {
+  // "`camel` case", "the `strict` mode": a concept, not a library. "Use `render` on triggers": a prop.
+  if (
+    afterWords[0] !== undefined &&
+    (NON_PACKAGE_NOUNS.has(afterWords[0]) || afterWords[0] === 'on')
+  ) {
     return { ignored: 'not-a-reference' };
   }
 
-  const near = [...beforeWords.slice(-6), ...afterWords.slice(0, 6)];
-  const strong = near.some((w) => STRONG_PACKAGE_CUES.has(w));
-  const weak = beforeWords.slice(-3).some((w) => WEAK_PACKAGE_CUES.has(w));
+  // Cues must be right next to the token: "use `zod`", "the `zod` library", "built with `vite`".
+  // (A cue anywhere in the sentence produced mostly false positives on real repos.)
+  const nounAfter = afterWords[0] !== undefined && PACKAGE_NOUNS.has(afterWords[0]);
+  const lead = beforeWords.slice(-3).filter((w, i, all) => i < all.length - 1 || !ARTICLES.has(w));
+  const last = lead[lead.length - 1];
+  const lastTwo = lead.slice(-2).join(' ');
+  const strongVerb =
+    (last !== undefined && STRONG_PACKAGE_CUES.has(last)) || CUE_PHRASES.includes(lastTwo);
+  // The weak verb must start the instruction: "Use `zod`", "We prefer `pino`".
+  const verbAt = beforeWords.lastIndexOf(last ?? '');
+  const weakVerb =
+    last !== undefined &&
+    WEAK_PACKAGE_CUES.has(last) &&
+    (last === 'using' || beforeWords.slice(0, verbAt).every((w) => IMPERATIVE_LEADS.has(w)));
+  const plain = !/[-_.]/.test(token.replace(/^@[^/]+\//, ''));
 
   let confidence: Confidence = 'low';
-  // `@scope/name` in backticks is a package mention even without a cue.
-  if (strong || token.startsWith('@')) confidence = 'medium';
-  // A weak cue ("use `x`") is enough for one-word names like `zod`, but not for
-  // `kebab-case`-style tokens, which are usually conventions.
-  else if (weak && !/[-_.]/.test(token)) confidence = 'medium';
+  // Dotted and underscored tokens (`plugins.update`, `get_user`) are identifiers unless a noun
+  // like "package" says otherwise.
+  if (nounAfter) confidence = 'medium';
+  else if (strongVerb && !/[._]/.test(token)) confidence = 'medium';
+  else if (weakVerb && (plain || token.startsWith('@'))) confidence = 'medium';
 
   return { confidence, negated: isNegated(beforeWords, afterWords) };
 }

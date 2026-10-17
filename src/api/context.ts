@@ -5,6 +5,8 @@ import type { ProjectContext } from '../core/context.js';
 import { UsageError } from '../core/errors.js';
 import { type Logger, silentLogger } from '../core/logger.js';
 import { FileIndex } from '../fs/file-index.js';
+import { TextCache } from '../fs/text-cache.js';
+import { loadTsconfigAliases } from '../manifests/tsconfig.js';
 
 export interface ContextOptions {
   /** Project root. Default: the nearest ancestor of process.cwd() containing `.git`. */
@@ -32,7 +34,10 @@ export async function createContext(options: ContextOptions = {}): Promise<Proje
   const { files: fileCount, dirs } = files.size;
   logger.debug(`Index: ${fileCount} files, ${dirs} directories`);
 
-  return { root, config, configPath, files, logger };
+  const aliases = { ...loadTsconfigAliases(files, new TextCache(root)), ...config.check.aliases };
+  if (Object.keys(aliases).length > 0) logger.debug(`Aliases: ${JSON.stringify(aliases)}`);
+
+  return { root, config, configPath, files, logger, aliases };
 }
 
 /** The nearest ancestor of `start` (inclusive) that contains `.git`, or `start` itself. */

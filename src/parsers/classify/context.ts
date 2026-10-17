@@ -13,11 +13,22 @@ export interface ClassifyContext {
   ignorePatterns: readonly RegExp[];
 }
 
-export function classifyContextFor(ctx: ProjectContext, filePath: string): ClassifyContext {
+/**
+ * The directory relative paths in a file are resolved against. Source rules are written for
+ * where they get compiled (the repo root), not for `.context/rules/`.
+ */
+export function referenceDir(file: { path: string; kind?: string }): string {
+  return file.kind === 'source' ? '' : dirnameRel(file.path);
+}
+
+export function classifyContextFor(
+  ctx: ProjectContext,
+  file: { path: string; kind?: string },
+): ClassifyContext {
   return {
     files: ctx.files,
-    fileDir: dirnameRel(filePath),
-    aliases: ctx.config.check.aliases,
+    fileDir: referenceDir(file),
+    aliases: ctx.aliases,
     ignorePatterns: ctx.config.check.ignorePatterns.map((p) => new RegExp(p)),
   };
 }

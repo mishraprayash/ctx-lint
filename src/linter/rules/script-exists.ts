@@ -121,6 +121,7 @@ function definesScript(ctx: RuleContext, pkg: NpmPackage, name: string): boolean
 }
 
 function resolveDir(ctx: RuleContext, dir: string): string {
+  if (dir === '') return ''; // The repo root (`# from the root` above the command).
   const fromFile = joinRel(ctx.fileDir, dir);
   return ctx.project.files.isDirectory(fromFile) ? fromFile : joinRel(dir);
 }

@@ -1,4 +1,4 @@
-import { joinRel } from '../../core/paths.js';
+import { dirnameRel, joinRel } from '../../core/paths.js';
 import type { PathReference } from '../../core/references.js';
 import type { LintRule } from '../rule.js';
 import { sourceText } from './util.js';
@@ -14,12 +14,22 @@ export const globMatches: LintRule = {
     if (ref.kind !== 'path' || !ref.isGlob) return;
     const files = ctx.project.files;
 
+    // `*.py` in rule frontmatter matches at any depth, as in .gitignore (Cursor, Copilot).
+    const anyDepth =
+      ref.bare || (ref.candidate.origin === 'frontmatter' && !ref.value.includes('/'));
     for (const base of basesFor(ref, ctx.file.path, ctx.fileDir)) {
-      const glob = ref.bare ? `**/${ref.value}` : joinRel(base, ref.value);
+      const glob = anyDepth ? joinRel(base, `**/${ref.value}`) : joinRel(base, ref.value);
       const prefix = staticPrefix(glob);
-      // Globs into unwalked or ignored directories (node_modules, dist) can't be checked.
-      if (prefix !== '' && (files.isUnindexed(prefix) || ctx.isIgnoredPath(prefix))) return;
-      if (files.matchAny(glob).length > 0) return;
+      // Globs into unwalked, ignored or gitignored directories (node_modules, build output) can't be checked.
+      if (
+        prefix !== '' &&
+        (files.isUnindexed(prefix) ||
+          ctx.isIgnoredPath(prefix) ||
+          files.wouldBeIgnored(prefix, 'dir'))
+      ) {
+        return;
+      }
+      if (files.hasMatch(glob)) return;
     }
 
     ctx.report({
@@ -35,11 +45,15 @@ export const globMatches: LintRule = {
  */
 function basesFor(ref: PathReference, filePath: string, fileDir: string): string[] {
   if (ref.fromFile || ref.rooted || ref.bare) return [''];
+  // Frontmatter globs (in a nested `.cursor/rules`, also relative to the folder that holds it).
   if (ref.candidate.origin === 'frontmatter') {
     const owner = /^(.*?)\/?\.(?:cursor|windsurf|github)\//.exec(filePath)?.[1] ?? '';
     return owner === '' ? [''] : ['', owner];
   }
-  return fileDir === '' ? [''] : ['', fileDir];
+  // Like paths: the root, then the file's directory and each directory up from it.
+  const bases = [''];
+  for (let dir = fileDir; dir !== ''; dir = dirnameRel(dir)) bases.push(dir);
+  return bases;
 }
 
 /** The directory part of a glob before its first wildcard: `src/api/**` → `src/api`. */

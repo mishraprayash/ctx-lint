@@ -603,6 +603,8 @@ Coverage target: ≥ 90% lines on `parsers/`, `linter/`, `syncer/`; ≥ 80% over
 ### 8.2 Real-world corpus (stretch, Phase 6)
 Collect ~50 public `CLAUDE.md` / `AGENTS.md` / `.mdc` files from popular OSS repos into `test/corpus/` (with license notes, or only as URLs plus a fetch script). Run `check` against each repo checkout in a nightly job and track false-positive rate as a metric.
 
+> **As built:** `test/corpus/repos.json` lists 26 repos (URLs only) and `pnpm corpus` fetches skeletons and writes a triage report; see the Phase 6 status for the first results. Not yet a nightly job.
+
 ### 8.3 Performance
 - One filesystem walk, no per-reference `stat` calls (except lazy `node_modules` checks).
 - Parse files concurrently (`Promise.all` with a small limit).
@@ -747,13 +749,31 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
   - Duplicates are counted per agent (blocks of 20+ characters repeated across its always-on files).
 
 ### Phase 6 — Hardening & polish
-- [ ] Git rename detection for suggestions
-- [ ] tsconfig `paths` alias resolution
-- [ ] Real-world corpus run, then fix the top false positives
-- [ ] Performance benchmark on the synthetic 50k-file repo
-- [ ] `ctx-lint explain <rule>` (prints the rule docs in the terminal)
-- [ ] Dogfood: this repo's `CLAUDE.md` / `AGENTS.md` come from `.context/rules`
+- [x] Git rename detection for suggestions
+- [x] tsconfig `paths` alias resolution
+- [x] Real-world corpus run, then fix the top false positives
+- [x] Performance benchmark on the synthetic 50k-file repo
+- [x] `ctx-lint explain <rule>` (prints the rule docs in the terminal)
+- [x] Dogfood: this repo's `CLAUDE.md` / `AGENTS.md` come from `.context/rules`
 - **Done when:** the false-positive rate on the corpus is < 2% of reported diagnostics (manually triaged), and the benchmark is under target.
+- **Status (2026-10-17):** done except the false-positive target, which is **not met** (numbers below). `pnpm verify`: 531 unit + 7 e2e tests. As built:
+  - **Benchmark** (`pnpm bench`, 50k files, 20 instruction files): `check` 0.31 s (target < 2 s). `FileIndex.hasMatch` walks only a glob's static prefix and stops at the first match (`glob-matches` was 1.3 s before).
+  - **`explain`** lists the rules, or prints `docs/rules/<id>.md`, and suggests a rule id for typos.
+  - **Renames:** one `git log -M --diff-filter=R` (at most 1,000 commits, 3 s timeout, only when a path is missing) gives "It was renamed to X in a1b2c3d" for files and directories, and `--fix` applies it.
+  - **Aliases:** the root tsconfig/jsconfig `paths` (with local `extends`). The catch-all `"*"` is ignored, and plain-word aliases (`lib/*`) also try the path as written.
+  - **Dogfooding:** this repo's CLAUDE.md, AGENTS.md and `.claude/rules/*` are generated from `.context/rules`, and CI runs `check`, `sync --check` and `audit` on them.
+  - **Corpus** (`pnpm corpus [dir] [--offline] [--limit N]`, `test/corpus/repos.json`): blobless clones with only the files ctx-lint reads checked out, fetched 4 at a time and resumable. It was run on the first 10 repos (disk space): sentry, n8n, excalidraw, tldraw, vscode, pydantic-ai, cal.com, supabase, PostHog, TypeScript (202 instruction files).
+  - **Result:** 13,954 diagnostics on the first full run (13,888 from one PostHog alias bug), 57 after the fixes. Triaged by hand: errors 29, about 3 false (10%); warnings 28, about 8 false (29%). The true positives include moved test files (pydantic-ai, vscode), docs pointing into the wrong package (n8n), broken links (vscode) and stale paths (cal.com, PostHog).
+  - **Fixes from the corpus** (each has a test case):
+    - Opaque directories trimmed (Decision 19), and paths resolve from the root and the file's ancestors (20).
+    - Adjacent and imperative package cues (21), and ecosystem-aware `dependency-installed` (22). It skips agent skills and accepts workspace short names.
+    - Shell, bare and example paths capped (23). `cd x && …` applies to the commands after it.
+    - Placeholders (`{x}`, `skill-name`, `-foo`, `0NNN`, `<…>`), routes, Python `module.attr` references, "there is no `x`", "generated" lists and "`x` repo" are skipped.
+    - `.js` references find their `.ts` sources, and a unique match below the file's own directory resolves.
+    - Symlinked instruction files (`CLAUDE.md` → `AGENTS.md`) are linted once.
+    - Commands under a `# from the root` comment in a code block run at the repo root. Paths after a modal verb ("may use `x`") are low.
+    - Cursor `.mdc` frontmatter is read leniently (`globs: *.ts, src/` is what Cursor writes), and slash-free frontmatter globs match at any depth.
+  - **What's left** is mostly unknowable offline: runtime or build-output paths, folders outside the repo, object-store keys, and paths relative to another package named in the same sentence. Open question: keep the < 2% target, or split it (errors vs warnings).
 
 ### Phase 7 — Release v0.1.0
 - [ ] Check the npm name; set `package.json` metadata (`bin`, `exports`, `files`, `engines`, `keywords`, `repository`)
@@ -809,6 +829,13 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 16 | Claude scoped rules compile to `.claude/rules/*.md` with `paths` by default | Native, loaded only for matching files (verified against Claude Code docs, 2026-10-17) | 2026-10-17 |
 | 17 | Sync is all-or-nothing, and `--force` overwrites unmarked files | A partial sync leaves agents inconsistent; overwriting is explicit and previewable with `--dry-run` | 2026-10-17 |
 | 18 | `gpt-tokenizer` is an optional peer dependency; the default is a calibrated heuristic | Light install; median 3% error is plenty for budgeting, and Claude's tokenizer isn't public anyway | 2026-10-17 |
+| 19 | Only `.git`, `node_modules`, package-manager stores and tool caches (`.next`, `.venv`, `__pycache__` …) are opaque by default; `build/`, `dist/`, `vendor/` are walked unless gitignored | Committed `build/` directories are real sources in big repos (vscode); gitignore already covers build output | 2026-10-17 |
+| 20 | Only markdown links and `../` paths resolve against the instruction file; `./x` and plain paths try the root, then the file's directory and each ancestor | On real repos, nested files write paths relative to their package as often as to the root, and `./x` in prose usually means "from where you run commands" | 2026-10-17 |
+| 21 | Package cues must be adjacent to the name, and weak verbs ("use", "prefer", "add") only count as an instruction | Sentence-wide cues produced most of the corpus false positives (`describe`, `workspace`, `alpine`) | 2026-10-17 |
+| 22 | `dependency-installed` is npm-only: it skips files whose nearest manifest belongs to another ecosystem and counts Python dependencies as declared | Mixed repos (pydantic-ai, sentry) mention Python libraries in the same files | 2026-10-17 |
+| 23 | Paths found in shell commands are medium at most; bare file names, bare globs and examples ("such as `x`") are low | They are often build outputs or illustrations, so they should never fail CI | 2026-10-17 |
+| 24 | `check` lints a symlinked instruction file once (on its target); Cursor `.mdc` frontmatter falls back to flat `key: value` parsing | PostHog symlinks CLAUDE.md → AGENTS.md (every problem was doubled), and Cursor itself writes unquoted `globs: *.ts` | 2026-10-17 |
+| 25 | tsconfig `"*"` aliases are ignored; plain-word aliases (`lib/*`) are tried alongside the path as written | A catch-all alias turned every backticked word into a path (13,888 false diagnostics on PostHog) | 2026-10-17 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
 1. ~~**Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files?~~ Resolved: neither. Claude Code supports `.claude/rules/*.md` with `paths`, which is now the default `"rules"` mode (Decision 16).

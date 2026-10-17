@@ -451,50 +451,76 @@ export const INTERPRETERS: ReadonlySet<string> = new Set([
 // ---------------------------------------------------------------------------------------------
 // Package mentions
 
-/** Words that suggest a backticked token is a library. */
+/** Verbs right before a token that mark it as a library: "install `zod`", "import `zod`". */
 export const STRONG_PACKAGE_CUES: ReadonlySet<string> = new Set([
-  'depend',
-  'dependencies',
-  'dependency',
-  'depends',
-  'dep',
-  'deps',
-  'framework',
   'import',
   'imported',
   'imports',
   'install',
   'installed',
   'installing',
+  'require',
+]);
+
+/**
+ * Weaker verbs: "use `zod`". Only count for plain one-word names (not `kebab-case`), and only as
+ * an instruction ("Use `zod`", "Always prefer `pino`"): "the SDK uses `alpine`" and "a config
+ * may add `ignores`" describe identifiers. ("requires `workspace`" is the same, so it's not a cue.)
+ */
+export const WEAK_PACKAGE_CUES: ReadonlySet<string> = new Set([
+  'add',
+  'choose',
+  'prefer',
+  'recommend',
+  'use',
+  'using',
+]);
+
+/** Words that may come before an instruction's verb: "Always use", "We prefer", "Please add". */
+export const IMPERATIVE_LEADS: ReadonlySet<string> = new Set([
+  'always',
+  'and',
+  'do',
+  "don't",
+  'never',
+  'not',
+  'generally',
+  'only',
+  'please',
+  'should',
+  'must',
+  'then',
+  'we',
+  'you',
+]);
+
+/** Two-word cues right before a token. */
+export const CUE_PHRASES: readonly string[] = [
+  'based on',
+  'built on',
+  'built with',
+  'depend on',
+  'depends on',
+  'powered by',
+  'relies on',
+  'rely on',
+];
+
+/** Nouns right after a token that mark it as a library: "the `zod` library". */
+export const PACKAGE_NOUNS: ReadonlySet<string> = new Set([
+  'dependency',
+  'framework',
   'lib',
   'libraries',
   'library',
   'package',
   'packages',
   'plugin',
-  'plugins',
   'sdk',
 ]);
 
-export const WEAK_PACKAGE_CUES: ReadonlySet<string> = new Set([
-  'built',
-  'choose',
-  'leverage',
-  'powered',
-  'prefer',
-  'preferred',
-  'prefers',
-  'recommend',
-  'recommended',
-  'relies',
-  'rely',
-  'use',
-  'used',
-  'uses',
-  'using',
-  'via',
-  'with',
-]);
+/** Skipped when looking for the word right before a token ("use the `zod` library"). */
+export const ARTICLES: ReadonlySet<string> = new Set(['a', 'an', 'the']);
 
 /** Phrases (lowercase, single spaces) before a token that mean "don't use this". */
 export const NEGATION_BEFORE: readonly string[] = [
@@ -503,7 +529,11 @@ export const NEGATION_BEFORE: readonly string[] = [
   'deprecated',
   "don't",
   "don't use",
+  "don't import",
+  "don't install",
   'do not',
+  'do not import',
+  'do not install',
   'do not use',
   'drop',
   'dropped',
@@ -513,6 +543,8 @@ export const NEGATION_BEFORE: readonly string[] = [
   'migrate from',
   'migrated from',
   'never',
+  'never import',
+  'never install',
   'never use',
   'no longer',
   'not',
@@ -539,6 +571,15 @@ export const NEGATION_AFTER: readonly string[] = [
 
 /** Lowercase words that match the npm name grammar but are almost never package mentions. */
 export const PACKAGE_STOPLIST: ReadonlySet<string> = new Set([
+  // Test-runner globals: "Use `describe` and `test`".
+  'describe',
+  'expect',
+  'suite',
+  // Query-builder and ORM options: "Use `select` instead of `include`".
+  'include',
+  'omit',
+  'select',
+  'where',
   'abstract',
   'any',
   'api',
@@ -724,6 +765,17 @@ export const PACKAGE_STOPLIST: ReadonlySet<string> = new Set([
 
 /** Nouns right after a token that show it's a concept, not a library ("`camel` case"). */
 export const NON_PACKAGE_NOUNS: ReadonlySet<string> = new Set([
+  'alias',
+  'env',
+  'hook',
+  'loader',
+  'role',
+  'setting',
+  'settings',
+  'skill',
+  'skills',
+  'team',
+  'token',
   'argument',
   'arguments',
   'attribute',
@@ -746,6 +798,8 @@ export const NON_PACKAGE_NOUNS: ReadonlySet<string> = new Set([
   'files',
   'flag',
   'flags',
+  'prop',
+  'props',
   'folder',
   'format',
   'function',

@@ -22,8 +22,16 @@ pnpm install
 | `pnpm lint` / `pnpm lint:fix` | Biome lint + format check / auto-fix |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm verify` | Everything CI runs |
+| `pnpm schema` | Regenerate `schema/config.schema.json` after changing the config schema |
+| `pnpm bench` | Time `check` on a synthetic 50k-file repo (target: under 2 s) |
+| `pnpm calibrate` | Refit the heuristic tokenizer against o200k and print its error |
+| `pnpm corpus [dir] [--limit N] [--offline]` | Fetch file-tree skeletons of the public repos in `test/corpus/repos.json` (4 at a time, resumable), lint them and write a triage report |
 
 Try your local build with `node dist/cli.js <command>`.
+
+This repo dogfoods ctx-lint: `CLAUDE.md`, `AGENTS.md` and `.claude/rules/` are generated from
+`.context/rules`. Edit those sources and run `node dist/cli.js sync`; CI runs `check`,
+`sync --check` and `audit` on the repo itself.
 
 ## Ground rules
 

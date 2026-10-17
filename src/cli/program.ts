@@ -5,6 +5,7 @@ import { ExitCode } from '../core/exit-codes.js';
 import { VERSION } from '../core/version.js';
 import { auditCommand } from './commands/audit.js';
 import { checkCommand } from './commands/check.js';
+import { explainCommand } from './commands/explain.js';
 import { initCommand } from './commands/init.js';
 import { syncCommand } from './commands/sync.js';
 import { type CliIO, type CommandRuntime, createRuntime, processIO } from './io.js';
@@ -31,6 +32,7 @@ export function createProgram(
     syncCommand(runtime),
     auditCommand(runtime),
     initCommand(runtime),
+    explainCommand(runtime),
   ]) {
     // Subcommands inherit the output and exit behavior of the root program.
     command.configureOutput({ writeOut: io.stdout, writeErr: io.stderr }).exitOverride();

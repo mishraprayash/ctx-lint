@@ -1,10 +1,10 @@
 import picomatch from 'picomatch';
 import type { ProjectContext } from '../core/context.js';
-import { dirnameRel } from '../core/paths.js';
 import type { Reference } from '../core/references.js';
 import type { Confidence, Diagnostic, Severity } from '../core/types.js';
 import type { LoadedFile } from '../discovery/index.js';
 import { Manifests } from '../manifests/index.js';
+import { referenceDir } from '../parsers/classify/index.js';
 import {
   collectDirectives,
   type DisableDirective,
@@ -74,7 +74,7 @@ export function lintFiles(
 
   const results = files.map((file) => {
     const raw: Diagnostic[] = [];
-    const fileDir = dirnameRel(file.path);
+    const fileDir = referenceDir(file);
 
     const contextFor = (rule: LintRule, confidence: Confidence): RuleContext => ({
       project: ctx,

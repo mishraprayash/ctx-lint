@@ -22,8 +22,41 @@ export interface Frontmatter {
  * diagnostics (`frontmatter-valid`).
  *
  * @param contentOffset file offset where the YAML text starts (just after the opening fence).
+ * @param lenient also accept flat `key: value` lines that aren't valid YAML, as Cursor does
+ *   for `.mdc` files (`globs: *.ts, src/`, the form Cursor's own docs and editor write).
  */
-export function parseFrontmatter(raw: string, range: Range, contentOffset: number): Frontmatter {
+export function parseFrontmatter(
+  raw: string,
+  range: Range,
+  contentOffset: number,
+  lenient = false,
+): Frontmatter {
+  const strict = parseStrict(raw, range, contentOffset);
+  if (!strict.error || !lenient) return strict;
+  const flat = parseFlat(raw);
+  return flat ? { raw, data: flat, range } : strict;
+}
+
+/**
+ * Flat `key: value` lines, values kept as strings (booleans aside). `null` when any line isn't
+ * one, so real YAML mistakes (bad indentation, lists) are still reported.
+ */
+function parseFlat(raw: string): Record<string, unknown> | null {
+  const data: Record<string, unknown> = {};
+  for (const line of raw.split('\n')) {
+    if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+    const match = /^([A-Za-z_][\w-]*):[ \t]*(.*?)[ \t]*$/.exec(line);
+    if (!match) return null;
+    const [, key, value] = match as unknown as [string, string, string];
+    if (key in data) return null;
+    const unquoted = /^(["'])(.*)\1$/.exec(value)?.[2] ?? value;
+    data[key] =
+      value === 'true' ? true : value === 'false' ? false : value === '' ? null : unquoted;
+  }
+  return data;
+}
+
+function parseStrict(raw: string, range: Range, contentOffset: number): Frontmatter {
   // The YAML starts on the line after the opening `---`.
   const firstLine = range.start.line + 1;
   const doc = parseDocument(raw, { prettyErrors: false, uniqueKeys: true });

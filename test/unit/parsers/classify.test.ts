@@ -103,10 +103,12 @@ describe('classify: configuration', () => {
     ]);
   });
 
-  it('resolves ./ paths and first segments relative to a nested instruction file', () => {
+  it('resolves ./ links from a nested instruction file, and other paths from the root up', () => {
     const ctx = { ...baseCtx, fileDir: 'packages/web' };
-    expect(classifyMarkdown('`./src/index.ts` and `src/app.tsx`', ctx).map(summarize)).toEqual([
+    const md = '[entry](./src/index.ts), `./src/index.ts` and `src/app.tsx`';
+    expect(classifyMarkdown(md, ctx).map(summarize)).toEqual([
       'path packages/web/src/index.ts high file',
+      'path src/index.ts high',
       'path src/app.tsx high',
     ]);
   });

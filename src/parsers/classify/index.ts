@@ -7,7 +7,7 @@ import { classifyPackageToken, isNodeBuiltin, packageNameFromSpecifier } from '.
 import { classifyPathToken } from './path.js';
 
 export type { ClassifyContext } from './context.js';
-export { classifyContextFor } from './context.js';
+export { classifyContextFor, referenceDir } from './context.js';
 
 /**
  * Turns a candidate into what it references. Always returns at least one entry; candidates
@@ -33,6 +33,8 @@ export function classify(candidate: Candidate, ctx: ClassifyContext): Classifica
 
 function classifyInline(candidate: Candidate, ctx: ClassifyContext): Classification[] {
   const token = candidate.raw.trim();
+  // `Areas/<Product area>`: a template, not a command with a `<` redirect.
+  if (/\S<[A-Za-z][^<>]*>/.test(token)) return ignored(candidate, 'placeholder');
   if (/\s/.test(token)) return orIgnored(candidate, classifyShell(candidate, ctx));
 
   const lead = candidate.raw.length - candidate.raw.trimStart().length;
@@ -41,7 +43,27 @@ function classifyInline(candidate: Candidate, ctx: ClassifyContext): Classificat
   const path = classifyPathToken(token, ctx, { origin: 'inlineCode' });
   if (path !== null) {
     if ('ignored' in path) return ignored(candidate, path.ignored);
-    return [{ kind: 'path', ...path.path, candidate, range }];
+    const before = sentenceBefore(candidate);
+    // "There is no `versions/` directory".
+    if (/\b(?:no|not)\s*$/.test(before)) return ignored(candidate, 'not-a-reference');
+    // "Import `./x.contribution.js` in `chat.contribution.ts`": relative to some source file.
+    if (/^\.\.?\//.test(token) && /\b(?:import|imports|require)\s*$/.test(before)) {
+      return ignored(candidate, 'not-a-reference');
+    }
+    // "the `supabase/troubleshooting` repo": a repository name.
+    if (/^\s*(?:repo|repository|org|organization)\b/i.test(sentenceAfter(candidate))) {
+      return ignored(candidate, 'not-a-reference');
+    }
+    // "files such as `LICENSES/Apache-2.0.txt`": an illustration, not a claim that it exists here.
+    // "Never hand-edit generated files: `x`": generated output may legitimately be absent.
+    // "Spec-driven work may use `.agents/specs/`": a possibility, not a claim it exists.
+    const example =
+      (EXAMPLE_CUE.test(before) && (path.path.confidence !== 'high' || path.path.isGlob)) ||
+      HYPOTHETICAL_CUE.test(before) ||
+      /\bgenerated\b/.test(lineBefore(candidate));
+    return [
+      { kind: 'path', ...path.path, ...(example ? { confidence: 'low' } : {}), candidate, range },
+    ];
   }
 
   const pkg = classifyPackageToken(token, candidate);
@@ -106,6 +128,44 @@ function classifyGlob(candidate: Candidate): Classification[] {
       range: candidate.range,
     },
   ];
+}
+
+/** A modal verb right before the path: "may use `x`", "could also add `x`", "might live in `x`". */
+const HYPOTHETICAL_CUE =
+  /\b(?:may|might|could|can)\s+(?:also\s+|optionally\s+)?[a-z]+\s+(?:in\s+|to\s+|a\s+|an\s+|the\s+)?$/;
+
+const EXAMPLE_CUE = /\b(?:such as|for example|for instance|like)\b|\be\.?g\./;
+
+/** The lowercased text of the token's sentence before it ('' without context). */
+function sentenceBefore(candidate: Candidate): string {
+  const context = candidate.context;
+  if (!context) return '';
+  const before = context.text.slice(0, context.index);
+  let start = 0;
+  for (const match of before.matchAll(/[.!?;:]\s/g)) {
+    // "e.g. `x`" and "i.e. `x`" don't end a sentence.
+    if (!/\b(?:e\.g|i\.e|etc|vs)$/i.test(before.slice(0, match.index))) {
+      start = match.index + match[0].length;
+    }
+  }
+  return before.slice(start).toLowerCase();
+}
+
+/** The token's sentence after it ('' without context). */
+function sentenceAfter(candidate: Candidate): string {
+  const context = candidate.context;
+  if (!context) return '';
+  const after = context.text.slice(context.index + candidate.raw.length);
+  const end = after.search(/[.!?;:](?:\s|$)/);
+  return end === -1 ? after : after.slice(0, end);
+}
+
+/** The lowercased text of the token's line (list item, paragraph line) before it. */
+function lineBefore(candidate: Candidate): string {
+  const context = candidate.context;
+  if (!context) return '';
+  const before = context.text.slice(0, context.index);
+  return before.slice(before.lastIndexOf('\n') + 1).toLowerCase();
 }
 
 function ignored(candidate: Candidate, reason: IgnoreReason): Classification[] {

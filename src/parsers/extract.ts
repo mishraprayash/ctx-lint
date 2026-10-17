@@ -76,9 +76,16 @@ export function extractCandidates(input: ExtractInput): Candidate[] {
   const out: Candidate[] = [];
   const contexts = inlineContexts(input.markdown);
 
-  walk(input.markdown.tree, (node) => {
+  walk(input.markdown.tree, (node, parent) => {
     switch (node.type) {
       case 'inlineCode':
+        // [`docs/a.md`](docs/a.md): the link is the reference; checking the text too doubles it.
+        if (
+          parent?.type === 'link' &&
+          parent.url.replace(/^\.\//, '') === node.value.replace(/^\.\//, '')
+        ) {
+          break;
+        }
         pushInlineCode(out, input, lines, node, contexts.get(node));
         break;
       case 'code':
@@ -115,7 +122,7 @@ function candidate(
   raw: string,
   origin: CandidateOrigin,
   segments: readonly Segment[],
-  extra: Partial<Pick<Candidate, 'lang' | 'context' | 'frontmatterKey'>> = {},
+  extra: Partial<Pick<Candidate, 'lang' | 'context' | 'frontmatterKey' | 'fromRoot'>> = {},
 ): Candidate {
   const toOffset = (i: number): number => {
     let seg = segments[0] as Segment;
@@ -231,6 +238,10 @@ function pushCodeBlock(out: Candidate[], input: ExtractInput, lines: LineMap, no
   }
 }
 
+/** "# From the repo root", "# run in the project root directory", "# (root)". */
+const ROOT_COMMENT =
+  /\b(?:from|in|at)\s+(?:the\s+)?(?:repo(?:sitory)?\s+|project\s+|workspace\s+|monorepo\s+)?root\b|^#\s*\(?root\)?\s*$/i;
+
 function pushShellLines(
   out: Candidate[],
   input: ExtractInput,
@@ -243,6 +254,8 @@ function pushShellLines(
 
   let i = 0;
   let heredocEnd: string | null = null;
+  // `# From the root directory of the project`: applies until the next comment or blank line.
+  let fromRoot = false;
   while (i < all.length) {
     const first = all[i] as CodeLine;
     i++;
@@ -259,7 +272,14 @@ function pushShellLines(
       ? { text: first.text.slice(prompt[0].length), offset: first.offset + prompt[0].length }
       : first;
     part = trimLeading(part);
-    if (part.text === '' || part.text.startsWith('#')) continue;
+    if (part.text === '') {
+      fromRoot = false;
+      continue;
+    }
+    if (part.text.startsWith('#')) {
+      fromRoot = ROOT_COMMENT.test(part.text);
+      continue;
+    }
 
     // Join `\` continuation lines into one logical command.
     let raw = '';
@@ -279,7 +299,12 @@ function pushShellLines(
       );
     }
 
-    out.push(candidate(input, lines, raw.trimEnd(), 'codeBlock', segments, { lang }));
+    out.push(
+      candidate(input, lines, raw.trimEnd(), 'codeBlock', segments, {
+        lang,
+        ...(fromRoot ? { fromRoot } : {}),
+      }),
+    );
   }
 }
 

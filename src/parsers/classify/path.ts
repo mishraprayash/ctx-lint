@@ -1,4 +1,4 @@
-import { joinRel, normalizeRel } from '../../core/paths.js';
+import { dirnameRel, joinRel, normalizeRel } from '../../core/paths.js';
 import type { CandidateOrigin, IgnoreReason, PathReference } from '../../core/references.js';
 import type { Confidence } from '../../core/types.js';
 import type { ClassifyContext } from './context.js';
@@ -15,7 +15,15 @@ import {
 /** The path-specific fields of a `PathReference`. */
 export type PathShape = Pick<
   PathReference,
-  'value' | 'isDir' | 'isGlob' | 'fromFile' | 'bare' | 'rooted' | 'anchor' | 'confidence'
+  | 'value'
+  | 'isDir'
+  | 'isGlob'
+  | 'fromFile'
+  | 'bare'
+  | 'rooted'
+  | 'anchor'
+  | 'confidence'
+  | 'unaliased'
 >;
 
 export type PathResult = { path: PathShape } | { ignored: IgnoreReason } | null;
@@ -45,8 +53,14 @@ export function classifyPathToken(
 
   // Aliases first, so `@/components` can become `src/components`.
   let aliased = false;
+  let unaliased: string | undefined;
   for (const [prefix, replacement] of Object.entries(ctx.aliases)) {
     if (t.startsWith(prefix)) {
+      // A plain-word alias (`lib/*`) may also be a real directory: keep the written path too.
+      if (/^[\p{L}\p{N}]/u.test(prefix)) {
+        const plain = classifyPathToken(token, { ...ctx, aliases: {} }, options);
+        if (plain !== null && 'path' in plain) unaliased = plain.path.value;
+      }
       t = replacement + t.slice(prefix.length);
       aliased = true;
       break;
@@ -70,17 +84,24 @@ export function classifyPathToken(
   }
 
   t = t.replace(/:\d+(?::\d+)?$/, ''); // `src/a.ts:42:7`
+  if (options.origin !== 'link') t = t.replace(/[,;]+$/, ''); // `(a.ts, b.ts)` in a diagram
   if (/^[\w.-]+(?:\\[\w.-]+)+\\?$/.test(t)) t = t.replaceAll('\\', '/'); // `src\utils\a.ts`
 
   // `/users/:id`, `api/:version/items`: route patterns, not files.
   if (/(?:^|\/):[A-Za-z_]\w*(?=\/|$)/.test(t)) return { ignored: 'route' };
+  // `?lastEventId` (query strings), `--vscode-*` (flags, CSS variables): not files.
+  if (/^[?-]/.test(t)) return { ignored: 'not-a-reference' };
   if (!(options.origin === 'link' ? LINK_PATH_CHARS : PATH_CHARS).test(t)) return null;
   // Parentheses are only allowed as whole segments: Next.js route groups like `app/(auth)/`.
   if (/[()]/.test(t.replace(/(^|\/)\([^/()]+\)(?=\/|$)/g, '$1'))) return null;
   if (t.startsWith('//')) return null;
 
   const rooted = t.startsWith('/');
-  const fromFile = /^\.\.?(?:\/|$)/.test(t);
+  const dotSlash = /^\.(?:\/|$)/.test(t);
+  const dotDot = /^\.\.(?:\/|$)/.test(t);
+  // Markdown links resolve against their file (as on GitHub). Elsewhere `./x` usually means
+  // "from where you run commands", so it's resolved like any other path; only `../` binds to the file.
+  const fromFile = options.origin === 'link' ? dotSlash || dotDot : dotDot;
   const isDir = t.endsWith('/') || options.forceDir === true;
   const isGlob = /[*?{]/.test(t);
   const body = rooted ? t.replace(/^\/+/, '') : t;
@@ -92,7 +113,7 @@ export function classifyPathToken(
   const segments = value.split('/');
   const first = segments[0] as string;
   const base = segments[segments.length - 1] as string;
-  const hasSlash = segments.length > 1 || rooted || fromFile;
+  const hasSlash = segments.length > 1 || rooted || fromFile || dotSlash;
   const ext = extensionOf(base);
   const knownExt = ext !== null && KNOWN_EXTENSIONS.has(ext);
   const wellKnown =
@@ -102,6 +123,8 @@ export function classifyPathToken(
     (KNOWN_DOTFILES.has(base) ||
       /^\.(?:env|eslintrc|prettierrc|stylelintrc|babelrc)(?:\.|$)/.test(base));
   const fileLike = knownExt || wellKnown || dotfile;
+  // `tools/report.is_self_improvement_title`, `report.py._build`: a Python attribute, not a file.
+  if (ext !== null && !knownExt && /_/.test(ext)) return { ignored: 'not-a-reference' };
 
   const shape = (confidence: Confidence, bare: boolean): PathResult => ({
     path: {
@@ -113,30 +136,124 @@ export function classifyPathToken(
       rooted,
       confidence,
       ...(anchor !== undefined && anchor !== '' ? { anchor } : {}),
+      ...(unaliased !== undefined && unaliased !== value ? { unaliased } : {}),
     },
   });
 
   if (!hasSlash) {
     if (BRAND_NAMES.has(base.toLowerCase())) return { ignored: 'not-a-reference' };
-    if (/^\.[a-z0-9]+$/i.test(base) && !dotfile) return { ignored: 'not-a-reference' }; // `.ts`
+    // `.ts`, `.test.ts`, `.d.ts`: extensions and suffixes, not files.
+    if (base.startsWith('.') && !dotfile) return { ignored: 'not-a-reference' };
     if (ext === 'json' && METHOD_RECEIVERS.has(stemOf(base))) return { ignored: 'not-a-reference' };
     if (isGlob) {
-      return /^[*?{},.]+$/.test(base) ? { ignored: 'placeholder' } : shape('medium', true);
+      if (/^[*?{},.]+$/.test(base)) return { ignored: 'placeholder' };
+      // Only file globs (`*.ts`, `*.test.tsx`); `get_*`, `n8n.start.*`, `*args` are identifiers.
+      // Low: a bare glob that matches nothing usually names build output (`*.js.map`).
+      return /\*[^/]*\.[A-Za-z0-9]+$/.test(base)
+        ? shape('low', true)
+        : { ignored: 'not-a-reference' };
     }
     if (isDir) return shape('medium', false); // `scripts/`
-    return fileLike ? shape('medium', true) : null;
+    // Bare names (`nls.messages.json`) are often build outputs or files mentioned in passing,
+    // and could live anywhere: too uncertain to report by default.
+    return fileLike ? shape('low', true) : null;
   }
 
-  if (fromFile) return shape('high', false);
+  if (fromFile) return shape(options.origin === 'link' ? 'high' : 'medium', false);
 
-  const firstExists = ctx.files.exists(first) || ctx.files.exists(joinRel(ctx.fileDir, first));
+  // `/skills`, `/settings`: an app route or URL path, not a file at the repo root.
+  if (rooted && segments.length === 1 && !fileLike && !isDir) return { ignored: 'route' };
+  // Rooted paths (`/inbox/*`) only mean the repo root.
+  const where = rooted ? (ctx.files.exists(first) ? 'near' : null) : whereSegmentExists(ctx, first);
+  const firstExists = where !== null;
   if (!firstExists) {
     if (rooted) return { ignored: SYSTEM_DIRS.has(first) ? 'system-path' : 'route' };
     const looksLike = unresolvedLooksLike(value);
     if (looksLike) return { ignored: looksLike };
   }
-  if (fileLike || isGlob || isDir) return shape(firstExists ? 'high' : 'medium', false);
-  return shape(firstExists ? 'medium' : 'low', false);
+  // A glob into a directory that doesn't exist is usually not about files (`release/*`, `changeset/*`).
+  if (isGlob) return shape(firstExists ? 'high' : 'low', false);
+  // `./scripts/deploy.sh` is unmistakably a path, even if `scripts/` is gone.
+  if (dotSlash && fileLike) return shape('high', false);
+  // `.clai/settings.json`, `.oss-build-out/x.js`: a tool's own directory, created at run time.
+  if (!firstExists && first.startsWith('.') && !REPO_DOT_DIRS.has(first))
+    return shape('low', false);
+  if (!firstExists) {
+    // `configs/sync/`, `serving/manifest.json` when no `configs/` or `serving/` exists anywhere
+    // near: API paths and object-store keys as often as stale paths. Source and doc files
+    // (`src/gone.ts`) are still worth a warning.
+    if (ext !== null && SOURCE_EXTENSIONS.has(ext)) return shape('medium', false);
+    return shape('low', false);
+  }
+  if (fileLike || isDir) return shape('high', false);
+  // `chat/configChanged`, `github/cli` (protocol names) in `src/vs/platform/agentHost/AGENTS.md`,
+  // where `chat/` only exists further up: too weak a match for an extensionless token.
+  return shape(where === 'near' ? 'medium' : 'low', false);
+}
+
+/** Extensions of files that live in a repo's source tree (not data or build output). */
+const SOURCE_EXTENSIONS: ReadonlySet<string> = new Set([
+  'c',
+  'cc',
+  'cjs',
+  'cpp',
+  'cs',
+  'css',
+  'cts',
+  'ex',
+  'exs',
+  'go',
+  'h',
+  'hpp',
+  'java',
+  'js',
+  'jsx',
+  'kt',
+  'md',
+  'mdc',
+  'mdx',
+  'mjs',
+  'mts',
+  'php',
+  'py',
+  'rb',
+  'rs',
+  'scss',
+  'sh',
+  'sql',
+  'svelte',
+  'swift',
+  'ts',
+  'tsx',
+  'vue',
+]);
+
+/** Dot-directories that live in repositories (as opposed to tool state in a home or build dir). */
+const REPO_DOT_DIRS: ReadonlySet<string> = new Set([
+  '.changeset',
+  '.circleci',
+  '.claude',
+  '.context',
+  '.cursor',
+  '.devcontainer',
+  '.github',
+  '.gitlab',
+  '.husky',
+  '.storybook',
+  '.vscode',
+  '.windsurf',
+]);
+
+/**
+ * Where a first path segment exists: `'near'` at the root or next to the file, `'ancestor'` only
+ * in a directory in between, `null` nowhere.
+ */
+function whereSegmentExists(ctx: ClassifyContext, segment: string): 'near' | 'ancestor' | null {
+  if (ctx.files.exists(segment) || ctx.files.exists(joinRel(ctx.fileDir, segment))) return 'near';
+  for (let dir = dirnameRel(ctx.fileDir); dir !== ''; dir = dirnameRel(dir)) {
+    if (ctx.files.exists(joinRel(dir, segment))) return 'ancestor';
+  }
+  return null;
 }
 
 /** Lowercase extension of a file name, or `null`. Dotfiles like `.env` have none. */

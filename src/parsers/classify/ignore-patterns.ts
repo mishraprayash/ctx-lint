@@ -23,11 +23,17 @@ const PLACEHOLDER_PATTERNS: readonly RegExp[] = [
   /%[A-Za-z_]+%/, // %APPDATA%
   /\.{3}|…/, // src/.../x
   /(?:^|\/)path\/to(?:\/|$)/i, // path/to/file
+  /\{[^,{}]*\}/, // {domain}, {provider}: a placeholder (brace expansion needs a comma)
 ];
 
-/** Segment stems that are placeholders ("foo/bar.ts", "your-app/", "my-component.tsx"). */
+/** Segment stems that are placeholders ("foo/bar.ts", "your-app/", "my-component.tsx", "skill-name/"). */
 const PLACEHOLDER_SEGMENT =
-  /^(?:foo|bar|baz|qux|quux|x{3,}|placeholder|example|sample|some[-_]?(?:file|dir|folder|path|thing|module|package)?|your[-_][\w-]+|my[-_][\w-]+)$/i;
+  /^(?:foo|bar|baz|qux|quux|x{3,}|placeholder|example|sample|some[-_]?(?:file|dir|folder|path|thing|module|package)?|your[-_][\w-]+|my[-_][\w-]+|[a-z]+[-_]name)$/i;
+/** `YourService.node.ts`, `MyComponent.tsx`: case-sensitive, so `mypy` and `yourls` are fine. */
+const PLACEHOLDER_PREFIX = /^(?:Your|My)[A-Z]/;
+/** `signals-scout-foo/`, `0NNN_add_index.py`, `XXXX-slug.md`: a placeholder inside a name. */
+const PLACEHOLDER_PART =
+  /(?:^|[-_])(?:foo|bar|baz)(?:$|[-_.])|(?:^|[^A-Za-z])(?:N{3,}|X{3,})(?:$|[^A-Za-z])/;
 
 const VERSION = /^[v^~>=<]*\d+(?:\.(?:\d+|x|\*))+(?:[-+][\w.]+)?$/i;
 const NUMERIC = /^(?=.*\d)[\d.,:/-]+$/;
@@ -52,7 +58,13 @@ export function ignoreReason(token: string): IgnoreReason | null {
 function hasPlaceholderSegment(token: string): boolean {
   return token
     .split('/')
-    .some((segment) => segment !== '' && PLACEHOLDER_SEGMENT.test(stem(segment)));
+    .some(
+      (segment) =>
+        segment !== '' &&
+        (PLACEHOLDER_SEGMENT.test(stem(segment)) ||
+          PLACEHOLDER_PREFIX.test(segment) ||
+          PLACEHOLDER_PART.test(segment)),
+    );
 }
 
 function stem(segment: string): string {

@@ -1,0 +1,31 @@
+{
+  "$comment": "Public repositories with agent instruction files, for `pnpm corpus` (PLAN.md §8.2). Only their file tree and the files ctx-lint reads are fetched; nothing is committed.",
+  "repos": [
+    "getsentry/sentry",
+    "n8n-io/n8n",
+    "excalidraw/excalidraw",
+    "tldraw/tldraw",
+    "microsoft/vscode",
+    "pydantic/pydantic-ai",
+    "calcom/cal.com",
+    "supabase/supabase",
+    "PostHog/posthog",
+    "microsoft/TypeScript",
+    "biomejs/biome",
+    "payloadcms/payload",
+    "mastra-ai/mastra",
+    "cloudflare/workers-sdk",
+    "vercel/next.js",
+    "withastro/astro",
+    "langchain-ai/langchainjs",
+    "anthropics/claude-code-action",
+    "denoland/deno",
+    "vitejs/vite",
+    "astral-sh/uv",
+    "nuxt/nuxt",
+    "vercel/ai",
+    "TanStack/router",
+    "microsoft/playwright",
+    "grafana/grafana"
+  ]
+}

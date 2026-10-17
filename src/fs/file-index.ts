@@ -16,32 +16,25 @@ export interface IndexEntry {
 }
 
 /**
- * Directories that are recorded but never walked: they are huge, generated, or both.
- * References into them still resolve, via a lazy (case-exact) disk lookup.
+ * Directories that are recorded but never walked, even when they aren't gitignored. Everything
+ * else that's gitignored is skipped too. Committed directories named `build/`, `dist/` or
+ * `vendor/` are real sources in many repos (vscode's `build/`), so they are walked.
+ * References into skipped directories still resolve, via a lazy (case-exact) disk lookup.
  */
 export const DEFAULT_OPAQUE_DIRS: readonly string[] = [
   '.git',
   'node_modules',
   'bower_components',
   '.pnpm-store',
-  'dist',
-  'build',
-  'out',
-  'coverage',
+  // Tool caches: never sources, even when nobody gitignored them.
   '.next',
   '.nuxt',
   '.svelte-kit',
   '.turbo',
-  '.cache',
   '.parcel-cache',
-  'target',
   '.venv',
-  'venv',
   '__pycache__',
-  '.pytest_cache',
-  '.mypy_cache',
-  '.gradle',
-  '.terraform',
+  '.tox',
 ];
 
 export interface FileIndexOptions {
@@ -177,6 +170,31 @@ export class FileIndex {
     if (list.length === 0) return [];
     const isMatch = picomatch(list, { dot: true });
     return [...this.entries.keys()].filter((p) => p !== '' && isMatch(p)).sort();
+  }
+
+  /**
+   * Whether any indexed file or directory matches the glob. Only the subtree under the glob's
+   * static prefix (`src/api/**` → `src/api`) is visited, and the walk stops at the first match.
+   */
+  hasMatch(glob: string): boolean {
+    const isMatch = picomatch(glob, { dot: true });
+    const segments: string[] = [];
+    for (const segment of glob.split('/')) {
+      if (/[*?{[\]]/.test(segment)) break;
+      segments.push(segment);
+    }
+    const prefix = normalizeRel(segments.join('/'));
+    if (prefix !== '' && this.entries.has(prefix) && isMatch(prefix)) return true;
+    const stack = [prefix];
+    while (stack.length > 0) {
+      const dir = stack.pop() as string;
+      for (const name of this.childNames.get(dir) ?? []) {
+        const child = dir === '' ? name : `${dir}/${name}`;
+        if (isMatch(child)) return true;
+        if (this.childNames.has(child)) stack.push(child);
+      }
+    }
+    return false;
   }
 
   /** Indexed entries whose path ends with `/<suffix>` (e.g. `components/Button.tsx`), sorted. */

@@ -21,6 +21,8 @@ export interface Candidate {
   context?: { text: string; index: number };
   /** Frontmatter key the value came from, e.g. `globs` (frontmatter only). */
   frontmatterKey?: string;
+  /** A comment above the command says it runs from the repo root (code blocks only). */
+  fromRoot?: boolean;
 }
 
 interface ReferenceBase {
@@ -44,6 +46,11 @@ export interface PathReference extends ReferenceBase {
   /** Written with a leading `/`, which we read as the repo root. */
   rooted: boolean;
   anchor?: string;
+  /**
+   * The path as written, when a plain-word tsconfig alias (`lib/*`, `scenes/*`) rewrote it:
+   * `lib/github.ts` may be the alias or a real `lib/` next to the file, so both are tried.
+   */
+  unaliased?: string;
 }
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';

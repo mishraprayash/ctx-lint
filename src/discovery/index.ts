@@ -70,7 +70,7 @@ function explicitPaths(ctx: ProjectContext, inputs: readonly string[], cwd: stri
 async function loadFile(ctx: ProjectContext, rel: string): Promise<LoadedFile> {
   const absPath = toAbsolute(ctx.root, rel);
   const content = stripBom(await readFile(absPath, 'utf8'));
-  const markdown = parseMarkdown(content);
+  const markdown = parseMarkdown(content, { lenient: rel.endsWith('.mdc') });
   const info = { path: rel, frontmatter: markdown.frontmatter?.data ?? null };
 
   const targets = TARGETS.filter((target) => matchesTarget(target, rel));

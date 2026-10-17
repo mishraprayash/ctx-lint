@@ -14,7 +14,9 @@ export const makeTargetExists: LintRule = {
     if (ref.kind !== 'target') return;
     const files = ctx.project.files;
     let dir = ctx.fileDir;
-    if (ref.dir !== undefined) {
+    if (ref.dir === '') {
+      dir = '';
+    } else if (ref.dir !== undefined) {
       const fromFile = joinRel(ctx.fileDir, ref.dir);
       dir = files.isDirectory(fromFile) ? fromFile : joinRel(ref.dir);
     }

@@ -13,8 +13,14 @@ export interface ParsedMarkdown {
   frontmatter: Frontmatter | null;
 }
 
-/** Parses CommonMark + GFM with optional YAML frontmatter. Positions are exact. */
-export function parseMarkdown(content: string): ParsedMarkdown {
+/**
+ * Parses CommonMark + GFM with optional YAML frontmatter. Positions are exact. `lenient`
+ * frontmatter is for Cursor `.mdc` files (see `parseFrontmatter`).
+ */
+export function parseMarkdown(
+  content: string,
+  options: { lenient?: boolean } = {},
+): ParsedMarkdown {
   const tree = fromMarkdown(content, {
     extensions: [gfm(), frontmatterSyntax(['yaml'])],
     mdastExtensions: [gfmFromMarkdown(), frontmatterFromMarkdown(['yaml'])],
@@ -24,7 +30,12 @@ export function parseMarkdown(content: string): ParsedMarkdown {
   const range = first?.type === 'yaml' ? rangeOf(first) : undefined;
   const frontmatter =
     first?.type === 'yaml' && range
-      ? parseFrontmatter(first.value, range, content.indexOf('\n', range.start.offset) + 1)
+      ? parseFrontmatter(
+          first.value,
+          range,
+          content.indexOf('\n', range.start.offset) + 1,
+          options.lenient === true,
+        )
       : null;
 
   return { tree, frontmatter };

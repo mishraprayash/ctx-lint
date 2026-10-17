@@ -24,13 +24,22 @@ import {
 // `cd web && pnpm build` yields a directory reference and a script reference.
 
 /** Classifies every command in a shell line. Returns `[]` when nothing is recognized. */
+/** Lines in unlabelled code blocks that are code, not shell: `const x = …`, `foo(bar);`, `=>`. */
+const CODE_LIKE =
+  /\b(?:const|let|var|function|return|import|export|await|class)\s|=>|[;{}]\s*$|^\s*\/\//;
+
 export function classifyShell(candidate: Candidate, ctx: ClassifyContext): Classification[] {
   const out: Classification[] = [];
+  if (candidate.origin === 'codeBlock' && candidate.lang === '' && CODE_LIKE.test(candidate.raw)) {
+    return out;
+  }
+  // `cd nodejs && pnpm run x`: later commands on the line run in that directory.
+  let cwd: string | undefined = candidate.fromRoot ? '' : undefined;
   for (const { words } of parseShellLine(candidate.raw)) {
     const cmd = stripCommandPrefix(words);
     const head = cmd[0];
     if (!head || head.dynamic) continue;
-    const emit = new Emitter(candidate, ctx, out);
+    const emit = new Emitter(candidate, ctx, out, cwd);
     const args = cmd.slice(1);
 
     switch (head.value) {
@@ -66,14 +75,14 @@ export function classifyShell(candidate: Candidate, ctx: ClassifyContext): Class
         node(args, emit);
         break;
       case 'cd':
-        cd(args, emit);
+        cwd = cd(args, emit);
         break;
       default:
         if (UNVERIFIABLE_TOOLS.has(head.value)) {
           out.push({ kind: 'ignored', reason: 'unverifiable-tool', candidate });
         } else if (INTERPRETERS.has(head.value)) {
           interpreter(head.value, args, emit);
-        } else if (head.value.includes('/')) {
+        } else if (head.value.includes('/') && !/^['"]/.test(candidate.raw.slice(head.start))) {
           // `./scripts/deploy.sh --prod`, `bin/dev`. Low-confidence heads (`a/b c`) are noise.
           emit.path(head, { skipLow: true });
         }
@@ -89,6 +98,8 @@ class Emitter {
     private readonly candidate: Candidate,
     private readonly ctx: ClassifyContext,
     private readonly out: Classification[],
+    /** Directory set by an earlier `cd` on the line, for references without their own. */
+    private readonly cwd?: string,
   ) {}
 
   private range(word: Word) {
@@ -109,7 +120,7 @@ class Emitter {
       confidence,
       candidate: this.candidate,
       range: this.range(word),
-      ...definedOnly(extra),
+      ...definedOnly({ ...extra, dir: extra.dir ?? this.cwd }),
     });
   }
 
@@ -139,7 +150,7 @@ class Emitter {
       confidence: 'high',
       candidate: this.candidate,
       range: this.range(word),
-      ...definedOnly(extra),
+      ...definedOnly({ ...extra, dir: extra.dir ?? this.cwd }),
     });
   }
 
@@ -166,6 +177,8 @@ class Emitter {
     });
     if (result === null) return false;
     if (options.skipLow && 'path' in result && result.path.confidence === 'low') return false;
+    // Paths in shell commands are often build outputs (`./out/bin/server`): warnings at most.
+    if ('path' in result && result.path.confidence === 'high') result.path.confidence = 'medium';
     if ('ignored' in result) {
       this.out.push({ kind: 'ignored', reason: result.ignored, candidate: this.candidate });
       return true;
@@ -505,10 +518,14 @@ function just(args: readonly Word[], emit: Emitter): void {
   });
 }
 
-function cd(args: readonly Word[], emit: Emitter): void {
+/** Emits the directory, and returns it (repo- or file-relative) for the commands after it. */
+function cd(args: readonly Word[], emit: Emitter): string | undefined {
   const target = args.find((w) => !w.value.startsWith('-'));
-  if (!target || target.value === '~' || target.value === '-') return;
+  if (!target || target.value === '~' || target.value === '-') return undefined;
   emit.path(target, { forceDir: true });
+  if (target.dynamic || /^(?:\/|~|\.\.)/.test(target.value)) return undefined;
+  const dir = target.value.replace(/^\.\//, '').replace(/\/+$/, '');
+  return dir === '' || dir === '.' ? undefined : dir;
 }
 
 const INTERPRETER_VALUE_FLAGS = new Set([

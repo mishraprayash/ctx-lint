@@ -1,7 +1,8 @@
 import path from 'node:path';
-import { basenameRel, joinRel, normalizeRel } from '../core/paths.js';
+import { basenameRel, dirnameRel, joinRel, normalizeRel } from '../core/paths.js';
 import type { PathReference } from '../core/references.js';
 import type { EntryType, FileIndex } from '../fs/file-index.js';
+import type { GitRenames } from '../fs/git-renames.js';
 import { closest } from './suggest.js';
 
 // Resolving path references against the index (PLAN.md §5.3 C, "Resolution order").
@@ -12,18 +13,75 @@ export type Resolution =
   | { status: 'not-a-directory'; path: string }
   | { status: 'missing'; tried: string[] };
 
-/** Repo-relative locations a path reference may mean, in order. */
+/**
+ * Repo-relative locations a path reference may mean, in order: the repo root, then the file's
+ * directory and each directory up from it. Nested instruction files often write paths relative
+ * to their package (`src/util/` in `extensions/copilot/src/…/AGENTS.md`).
+ */
 export function candidatesFor(ref: PathReference, fileDir: string): string[] {
   if (ref.fromFile || ref.rooted) return [ref.value];
-  const fromDir = joinRel(fileDir, ref.value);
-  return fromDir === ref.value ? [ref.value] : [ref.value, fromDir];
+  const out = [ref.value];
+  for (let dir = fileDir; dir !== ''; dir = dirnameRel(dir)) {
+    const candidate = joinRel(dir, ref.value);
+    if (!out.includes(candidate)) out.push(candidate);
+  }
+  return out;
 }
 
+/** Extensions and index files tried for extensionless module paths (`@/components/Button`). */
+const MODULE_SUFFIXES = [
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.mts',
+  '.cts',
+  '.vue',
+  '.svelte',
+]
+  .flatMap((ext) => [ext, `/index${ext}`])
+  .concat(['.md', '.mdx', '.json']);
+
+const TS_SOURCES: readonly ((p: string) => string)[] = [
+  (p) => p.replace(/\.js$/, '.ts'),
+  (p) => p.replace(/\.js$/, '.tsx'),
+  (p) => p.replace(/\.jsx$/, '.tsx'),
+  (p) => p.replace(/\.mjs$/, '.mts'),
+  (p) => p.replace(/\.cjs$/, '.cts'),
+];
+
 export function resolvePath(ref: PathReference, files: FileIndex, fileDir: string): Resolution {
+  const resolution = resolveOne(ref, files, fileDir);
+  if (resolution.status === 'found' || ref.unaliased === undefined) return resolution;
+  const { unaliased, ...plain } = ref;
+  const asWritten = resolveOne({ ...plain, value: unaliased }, files, fileDir);
+  if (asWritten.status !== 'missing') return asWritten;
+  return resolution.status === 'missing'
+    ? { status: 'missing', tried: [...resolution.tried, ...asWritten.tried] }
+    : resolution;
+}
+
+function resolveOne(ref: PathReference, files: FileIndex, fileDir: string): Resolution {
   const tried = candidatesFor(ref, fileDir);
   let notDir: string | undefined;
   for (const candidate of tried) {
     const type = files.get(candidate);
+    // `src/auth/guard` written like an import: try what a module resolver would.
+    if (type === null && !ref.isDir && !/\.[^/]+$/.test(candidate)) {
+      const found = MODULE_SUFFIXES.map((suffix) => candidate + suffix).find((p) =>
+        files.isFile(p),
+      );
+      if (found) return { status: 'found', path: found, type: 'file' };
+    }
+    // `./x.contribution.js` in TypeScript ESM code means `x.contribution.ts`.
+    if (type === null && /\.(?:m|c)?jsx?$/.test(candidate)) {
+      const source = TS_SOURCES.map((map) => map(candidate)).find(
+        (p) => p !== candidate && files.isFile(p),
+      );
+      if (source) return { status: 'found', path: source, type: 'file' };
+    }
     if (type === null) continue;
     if (ref.isDir && type === 'file') {
       notDir ??= candidate;
@@ -42,9 +100,25 @@ export function resolvePath(ref: PathReference, files: FileIndex, fileDir: strin
   // segment isn't a real top-level entry (otherwise the author clearly meant the root).
   if (!ref.fromFile && !ref.rooted && !ref.bare) {
     const first = ref.value.split('/')[0] as string;
-    if (!files.exists(first) && !files.exists(joinRel(fileDir, first))) {
-      const match = files.withSuffix(ref.value, ref.isDir ? 'dir' : undefined)[0];
-      if (match) return { status: 'found', path: match, type: files.get(match) ?? 'file' };
+    if (candidatesFor({ ...ref, value: first }, fileDir).every((p) => !files.exists(p))) {
+      // `vs/code/browser/workbench/workbench.js` (build output) for `src/vs/…/workbench.ts`.
+      const sources = ref.isDir ? [] : TS_SOURCES.map((map) => map(ref.value));
+      for (const suffix of new Set([ref.value, ...sources])) {
+        const match = files.withSuffix(suffix, ref.isDir ? 'dir' : undefined)[0];
+        if (match) return { status: 'found', path: match, type: files.get(match) ?? 'file' };
+      }
+    }
+  }
+
+  // `hogli/cli.py` in `tools/hogli/AGENTS.md` for `tools/hogli/src/hogli/cli.py`: somewhere
+  // below the file's own directory.
+  if (!ref.fromFile && !ref.rooted && fileDir !== '') {
+    const below = files
+      .withSuffix(ref.value, ref.isDir ? 'dir' : undefined)
+      .filter((p) => p.startsWith(`${fileDir}/`));
+    if (below.length === 1) {
+      const found = below[0] as string;
+      return { status: 'found', path: found, type: files.get(found) ?? 'file' };
     }
   }
 
@@ -55,7 +129,9 @@ export function resolvePath(ref: PathReference, files: FileIndex, fileDir: strin
 /** Exact-case paths that differ from what was written only in case. */
 export function caseMatches(ref: PathReference, files: FileIndex, fileDir: string): string[] {
   const found = new Set<string>();
-  for (const candidate of candidatesFor(ref, fileDir)) {
+  const values = ref.unaliased === undefined ? [ref.value] : [ref.value, ref.unaliased];
+  const candidates = values.flatMap((value) => candidatesFor({ ...ref, value }, fileDir));
+  for (const candidate of candidates) {
     for (const variant of files.caseVariants(candidate)) {
       if (!ref.isDir || files.isDirectory(variant)) found.add(variant);
     }
@@ -67,13 +143,28 @@ export interface PathSuggestion {
   paths: string[];
   /** Unique and safe enough for `--fix`. */
   fixable: boolean;
+  /** Set when git history says the path was renamed: the commit that did it. */
+  renamedIn?: string;
 }
 
 /**
  * Where a missing path probably went: the same file name elsewhere (it was moved), or a
  * near-miss name next to where it should be (it was renamed or misspelled).
  */
-export function suggestPath(ref: PathReference, files: FileIndex, fileDir: string): PathSuggestion {
+export function suggestPath(
+  ref: PathReference,
+  files: FileIndex,
+  fileDir: string,
+  renames?: GitRenames,
+): PathSuggestion {
+  // Git history knows best: a recorded rename beats any guess.
+  if (renames) {
+    for (const candidate of candidatesFor(ref, fileDir)) {
+      const renamed = ref.isDir ? renames.directory(candidate) : renames.file(candidate);
+      if (renamed) return { paths: [renamed.to], fixable: true, renamedIn: renamed.commit };
+    }
+  }
+
   const base = basenameRel(ref.value);
   const wantDir = ref.isDir;
   const moved = files
@@ -141,6 +232,8 @@ export function rewriteAs(
     text = rel.startsWith('../') ? rel : `./${rel}`;
   } else {
     text = ref.rooted ? `/${suggestion}` : displayPath(ref, suggestion, fileDir);
+    // A `./x` in a command or prose keeps its `./`.
+    if (plain.startsWith('./') && !text.startsWith('/')) text = `./${text}`;
   }
   if (original.endsWith('/') && files.isDirectory(suggestion)) text += '/';
   return text;

@@ -3,7 +3,7 @@
 > Context linter & sync for AI coding agents.
 
 > [!WARNING]
-> Early development: `check`, `sync` and `audit` work; hardening and the first release are next. See [PLAN.md](PLAN.md) for the roadmap.
+> Pre-release: `check`, `sync` and `audit` work; the first npm release is next. See [PLAN.md](PLAN.md) for the roadmap.
 
 AI coding agents each read their own instruction file (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, …). These files drift apart, and they rot: they point at deleted files, renamed directories, scripts that no longer exist, and packages you removed. Agents trust them anyway.
 
@@ -54,7 +54,12 @@ Rules: [path-exists](docs/rules/path-exists.md) · [path-case](docs/rules/path-c
 [dependency-installed](docs/rules/dependency-installed.md) · [frontmatter-valid](docs/rules/frontmatter-valid.md) ·
 [unused-disable](docs/rules/unused-disable.md)
 
-Silence a line with `<!-- ctx-lint-disable-next-line path-exists -- reason -->`.
+Silence a line with `<!-- ctx-lint-disable-next-line path-exists -- reason -->`. Run
+`ctx-lint explain <rule>` for what a rule checks and how to fix it.
+
+Missing paths come with the likeliest fix: the rename from git history (*"It was renamed to …
+in a1b2c3d"*), the same file name elsewhere, or a near-miss name. tsconfig `paths` aliases
+(`@/components/Button`) are resolved automatically.
 
 ## Sync: one source of truth
 

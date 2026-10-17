@@ -1,28 +1,42 @@
 import type { ProjectContext } from '../core/context.js';
 import { dirnameRel, joinRel } from '../core/paths.js';
+import { GitRenames } from '../fs/git-renames.js';
 import { TextCache } from '../fs/text-cache.js';
 import { findJustfile, loadJustRecipes } from './just.js';
 import { findMakefile, loadMakeTargets, type TargetSet } from './make.js';
 import { loadNpmProject, type NpmProject } from './npm.js';
+import { loadPythonDependencies } from './python.js';
 
 export type { TargetSet } from './make.js';
 export { hasTarget } from './make.js';
 export type { NpmPackage, NpmProject } from './npm.js';
 export { binStatus, matchWorkspaces, nearestPackage } from './npm.js';
+export { ecosystemOf, normalizePythonName } from './python.js';
 
-/** Lazily loaded project manifests (package.json files, Makefiles, justfiles), cached per run. */
+/** Lazily loaded project manifests (package.json, Python, Makefiles, justfiles), cached per run. */
 export class Manifests {
   readonly text: TextCache;
   private npmProject: NpmProject | undefined;
+  private pythonDependencies: ReadonlySet<string> | undefined;
   private readonly targetSets = new Map<string, TargetSet>();
+
+  /** Renames from git history, for "it was renamed to …" suggestions (loaded on first use). */
+  readonly renames: GitRenames;
 
   constructor(private readonly ctx: ProjectContext) {
     this.text = new TextCache(ctx.root);
+    this.renames = new GitRenames(ctx.root, ctx.files, ctx.logger);
   }
 
   get npm(): NpmProject {
     this.npmProject ??= loadNpmProject(this.ctx.files, this.text);
     return this.npmProject;
+  }
+
+  /** Normalized names of the Python dependencies declared anywhere in the repo. */
+  get python(): ReadonlySet<string> {
+    this.pythonDependencies ??= loadPythonDependencies(this.ctx.files, this.text);
+    return this.pythonDependencies;
   }
 
   /**

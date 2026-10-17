@@ -11,4 +11,6 @@ export interface ProjectContext {
   configPath: string | null;
   files: FileIndex;
   logger: Logger;
+  /** Path aliases: tsconfig/jsconfig `paths`, overridden by `check.aliases`. */
+  aliases: Readonly<Record<string, string>>;
 }
