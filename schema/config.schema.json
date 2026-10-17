@@ -40,10 +40,11 @@
               "minLength": 1
             },
             "scopedRules": {
-              "default": "sections",
-              "description": "How path-scoped rules are emitted: as sections of the root file, or as nested files in the matching directories.",
+              "default": "rules",
+              "description": "How path-scoped rules are emitted: `.claude/rules/*.md` files with `paths` (loaded only for matching files), sections of CLAUDE.md, or nested CLAUDE.md files.",
               "type": "string",
               "enum": [
+                "rules",
                 "sections",
                 "nested"
               ]
@@ -68,7 +69,7 @@
             },
             "scopedRules": {
               "default": "sections",
-              "description": "How path-scoped rules are emitted: as sections of the root file, or as nested files in the matching directories.",
+              "description": "How path-scoped rules are emitted: as sections of AGENTS.md, or as nested AGENTS.md files.",
               "type": "string",
               "enum": [
                 "sections",

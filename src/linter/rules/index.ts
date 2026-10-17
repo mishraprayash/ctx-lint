@@ -2,6 +2,7 @@ import type { LintRule } from '../rule.js';
 import { binExists } from './bin-exists.js';
 import { dependencyInstalled } from './dependency-installed.js';
 import { frontmatterValid } from './frontmatter-valid.js';
+import { generatedFileModified } from './generated-file-modified.js';
 import { globMatches } from './glob-matches.js';
 import { linkAnchor } from './link-anchor.js';
 import { makeTargetExists } from './make-target-exists.js';
@@ -31,6 +32,7 @@ export const RULES: readonly LintRule[] = [
   packageManagerMismatch,
   dependencyInstalled,
   frontmatterValid,
+  generatedFileModified,
   UNUSED_DISABLE,
 ];
 

@@ -1,0 +1,7 @@
+---
+description: API route conventions
+globs: src/api/**/*.ts
+alwaysApply: false
+---
+
+- Validate request bodies.

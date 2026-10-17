@@ -3,7 +3,7 @@
 > Context linter & sync for AI coding agents.
 
 > [!WARNING]
-> Early development: `check` works; `sync` and `audit` are next. See [PLAN.md](PLAN.md) for the roadmap.
+> Early development: `check` and `sync` work; `audit` is next. See [PLAN.md](PLAN.md) for the roadmap.
 
 AI coding agents each read their own instruction file (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, …). These files drift apart, and they rot: they point at deleted files, renamed directories, scripts that no longer exist, and packages you removed. Agents trust them anyway.
 
@@ -55,6 +55,37 @@ Rules: [path-exists](docs/rules/path-exists.md) · [path-case](docs/rules/path-c
 [unused-disable](docs/rules/unused-disable.md)
 
 Silence a line with `<!-- ctx-lint-disable-next-line path-exists -- reason -->`.
+
+## Sync: one source of truth
+
+Write rules once in `.context/rules/*.md`:
+
+```md
+---
+description: API route conventions
+globs: ["src/api/**/*.ts"]   # omit for rules that always apply
+---
+- Validate every request body with `zod`.
+```
+
+```bash
+npx ctx-lint init --import   # turn your existing CLAUDE.md, AGENTS.md, Cursor/Copilot rules into sources
+npx ctx-lint sync            # write each agent's native files
+npx ctx-lint sync --check    # in CI: fail if generated files are stale or edited by hand
+```
+
+| Agent | Always-applied rules | Path-scoped rules |
+|---|---|---|
+| Claude Code | `CLAUDE.md` | `.claude/rules/*.md` with `paths` |
+| AGENTS.md (Codex, opencode, Amp, …) | `AGENTS.md` | sections, or nested `AGENTS.md` |
+| Cursor | `.cursor/rules/*.mdc` (`alwaysApply: true`) | `.cursor/rules/*.mdc` with `globs` |
+| GitHub Copilot | `.github/copilot-instructions.md` | `.github/instructions/*.instructions.md` with `applyTo` |
+| Windsurf / Devin (opt-in) | `.windsurf/rules/*.md` (`always_on`) | `trigger: glob` |
+
+`sync` only touches content it generated. In single files it writes between
+`<!-- ctx-lint:begin -->` / `<!-- ctx-lint:end -->` markers, so hand-written notes around them
+survive. It refuses to overwrite anything else without `--force`, and `--dry-run` shows the diff.
+See [docs/targets.md](docs/targets.md) for every format detail.
 
 ## Contributing
 

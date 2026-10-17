@@ -54,4 +54,23 @@ This lists every candidate, what it was classified as and why it was ignored. Ad
 `test/unit/parsers/classify.cases.ts` and `test/fixtures/false-positives/CLAUDE.md`, then fix
 the classifier.
 
-Guides for adding a sync target and a manifest provider are coming with Phase 4.
+## Adding a sync target
+
+1. Add the id to `AGENT_IDS` (`src/core/types.ts`) and a config section in `src/config/schema.ts`
+   (then `pnpm schema`).
+2. Create `src/targets/<id>.ts` implementing `TargetAdapter`:
+   - `detect` and `isAlwaysOn`: which files the agent reads (used by `check` and `audit`);
+   - `compile(rules, { config })`: return `OutputFile`s. Per-rule files set `perRule: true`
+     and pass their frontmatter through `renderFrontmatter`; the generated-file header and
+     managed blocks are added for you;
+   - `ownedDirs`: where per-rule files go, so orphans get cleaned up.
+3. Add its frontmatter format to `src/targets/frontmatter.ts` if it has one.
+4. Register it in `src/targets/registry.ts`, add a case to `test/unit/syncer/compile.test.ts`
+   (file snapshots), and document the format, with the vendor docs URL and the date you checked,
+   in `docs/targets.md`.
+
+## Adding a manifest provider
+
+Manifest parsing lives in `src/manifests/` (`npm.ts`, `make.ts`, `just.ts`) and is reached
+through the `Manifests` class. A new task runner (Taskfile, pyproject scripts…) adds a parser
+there plus a reference kind in `src/parsers/classify/command.ts` and a rule.

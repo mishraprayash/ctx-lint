@@ -11,6 +11,7 @@ import {
   Suppressions,
 } from '../parsers/disable-comments.js';
 import { referencesOf } from '../parsers/references.js';
+import { findGenerated } from '../syncer/generated.js';
 import type { LintRule, ReportDescriptor, RuleContext } from './rule.js';
 import { RULES, UNUSED_DISABLE } from './rules/index.js';
 
@@ -107,7 +108,17 @@ export function lintFiles(
 
     const directives = collectDirectives(file.markdown.tree);
     const suppressions = new Suppressions(directives);
-    let diagnostics = raw.filter((d) => !suppressions.isSuppressed(d.ruleId, d.range.start.line));
+    // Generated content comes from source rules, which are linted themselves: report problems
+    // once, where they can be fixed.
+    const generated = findGenerated(file.content);
+    const inGenerated = (d: Diagnostic) =>
+      generated !== null &&
+      d.ruleId !== 'generated-file-modified' &&
+      d.range.start.offset >= generated.start &&
+      d.range.start.offset < generated.end;
+    let diagnostics = raw.filter(
+      (d) => !inGenerated(d) && !suppressions.isSuppressed(d.ruleId, d.range.start.line),
+    );
     if (severities.get(UNUSED_DISABLE.id) !== 'off') {
       diagnostics.push(
         ...unusedDisableDiagnostics(file.path, directives, suppressions.unused(), severities),

@@ -12,8 +12,9 @@ describe('config', () => {
     expect(config.targets.claude).toEqual({
       enabled: true,
       output: 'CLAUDE.md',
-      scopedRules: 'sections',
+      scopedRules: 'rules',
     });
+    expect(config.targets.agents.scopedRules).toBe('sections');
     expect(config.targets.windsurf.enabled).toBe(false);
     expect(config.check.minConfidence).toBe('medium');
     expect(config.audit.budget.default).toBe(2500);

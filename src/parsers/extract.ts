@@ -59,8 +59,8 @@ export const IMPORT_LANGS: ReadonlySet<string> = new Set([
   'astro',
 ]);
 
-/** Frontmatter keys that hold globs: Cursor/Windsurf/source rules (`globs`), Copilot (`applyTo`). */
-const GLOB_KEYS = ['globs', 'applyTo'] as const;
+/** Frontmatter keys that hold globs: Cursor/Windsurf/source rules (`globs`), Copilot (`applyTo`), Claude rules (`paths`). */
+const GLOB_KEYS = ['globs', 'applyTo', 'paths'] as const;
 
 /** `cat <<EOF`, `cat <<-'EOF'`: the delimiter that ends the heredoc body. */
 const HEREDOC = /<<-?\s*['"]?([A-Za-z_][\w-]*)['"]?/;
@@ -386,7 +386,7 @@ function pushFrontmatterGlobs(out: Candidate[], input: ExtractInput, lines: Line
 }
 
 /** Splits `a, b,{c,d}` on commas that are not inside braces. */
-function splitGlobList(value: string): string[] {
+export function splitGlobList(value: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let current = '';

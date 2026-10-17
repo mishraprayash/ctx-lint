@@ -717,14 +717,22 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
   - This repo has its own `.context/config.json`, which excludes `examples/**` and `test/fixtures/**` (they contain intentional problems).
 
 ### Phase 4 — `sync`
-- [ ] Source loader + frontmatter validation (zod) → `RuleIR[]`
-- [ ] Compilers: cursor, claude, agents, copilot (windsurf behind `enabled: false` default)
-- [ ] Header + hash, managed-block mode, file mode, orphan deletion
-- [ ] Write planner: default / `--dry-run` (diffs) / `--check` / `--target`
-- [ ] `generated-file-modified` rule in `check`
-- [ ] `init` and `init --import` (with `--split`)
-- [ ] Verify every target format against current vendor docs → `docs/targets.md`
+- [x] Source loader + frontmatter validation (zod) → `RuleIR[]`
+- [x] Compilers: cursor, claude, agents, copilot (windsurf behind `enabled: false` default)
+- [x] Header + hash, managed-block mode, file mode, orphan deletion
+- [x] Write planner: default / `--dry-run` (diffs) / `--check` / `--target`
+- [x] `generated-file-modified` rule in `check`
+- [x] `init` and `init --import` (with `--split`)
+- [x] Verify every target format against current vendor docs → `docs/targets.md`
 - **Done when:** the snapshot tests for every target × rule kind pass, running `sync` twice is idempotent (the second run reports 0 changes), `sync --check` exits 1 after a manual edit, and the import → sync round-trip of the fixture is stable.
+- **Status (2026-10-17):** done. Nine file snapshots cover every target and mode × every rule kind (`test/unit/syncer/__snapshots__`). The sync, idempotency, drift, orphan, managed-block and import round-trip tests run on temp copies, plus a CLI e2e. `pnpm verify`: 474 unit + 6 e2e tests. Changes from the plan, after checking vendor docs (recorded in `docs/targets.md`):
+  - **Claude Code has native path-scoped rules** (`.claude/rules/*.md` with `paths:`), so `targets.claude.scopedRules` defaults to `"rules"` (also `"sections"`, `"nested"`). This resolves Open Question 1. `check`/`audit` read `.claude/rules` too.
+  - **Cursor `globs` must be one comma-separated string** (no YAML lists), so `frontmatter-valid` reports lists as errors. Generated globs that start with a YAML indicator are double-quoted.
+  - **Windsurf is now Devin Desktop:** `.devin/rules` is detected along with `.windsurf/rules`, nested ids are flattened, and a warning is emitted above 12,000 characters per rule file.
+  - Hand-added `<!-- ctx-lint:begin -->`/`<!-- ctx-lint:end -->` markers (no hash) opt a file in. `--force` overwrites an unmarked file (after `--dry-run` shows the diff). Sync is all-or-nothing: any conflict or invalid source means nothing is written.
+  - `check` skips problems inside generated content (they're reported once, on the source rule), and `--fix` therefore never edits generated text.
+  - Rule bodies' headings are shifted to nest under their section. `frontmatter-valid` suggests the right key per format (`globs` → `paths` for Claude, → `applyTo` for Copilot).
+  - `init --import` skips CLAUDE.local.md, generated files and pointer files (`@AGENTS.md`), merges identical content (CLAUDE.md = AGENTS.md), skips content already in a source rule (so re-imports are idempotent), and reminds you to delete nested originals.
 
 ### Phase 5 — `audit`
 - [ ] Heuristic tokenizer + calibration script (`scripts/calibrate-tokenizer.ts`), with the error documented
@@ -793,9 +801,11 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 13 | Medium-confidence references report as warnings at most | Precision over recall (§1.3): only references we're sure about can fail CI | 2026-10-17 |
 | 14 | Missing-but-gitignored paths are not reported | They're local or generated files (`.env.local`, build output), not context rot | 2026-10-17 |
 | 15 | Open Question 2 resolved: a script missing where it runs but defined in another package is a warning with a "run it there" hint | Usually means "wrong directory", not "deleted" | 2026-10-17 |
+| 16 | Claude scoped rules compile to `.claude/rules/*.md` with `paths` by default | Native, loaded only for matching files (verified against Claude Code docs, 2026-10-17) | 2026-10-17 |
+| 17 | Sync is all-or-nothing, and `--force` overwrites unmarked files | A partial sync leaves agents inconsistent; overwriting is explicit and previewable with `--dry-run` | 2026-10-17 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
-1. **Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files? Leaning `sections`, which is more predictable and keeps everything in one file. Check whether Claude Code's current path-scoped rule support (e.g. a `.claude/rules/` directory with path frontmatter) is stable enough to be a third mode.
+1. ~~**Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files?~~ Resolved: neither. Claude Code supports `.claude/rules/*.md` with `paths`, which is now the default `"rules"` mode (Decision 16).
 2. ~~**Phase 3:** Should a script that exists in *some* workspace but not the nearest one be an error or a warning?~~ Resolved: a warning with a hint (Decision 15).
 3. **Phase 7:** Final npm package name and GitHub org.
 4. **Phase 2:** Should `check` lint paths in fenced code blocks of non-shell languages (e.g. `import x from './foo'` in a TS example)? Proposed: no in v1, since that's generic example code.

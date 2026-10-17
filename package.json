@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "commander": "^15.0.0",
+    "diff": "^9.0.0",
     "fastest-levenshtein": "^1.0.16",
     "ignore": "^7.0.12",
     "jsonc-parser": "^3.3.1",

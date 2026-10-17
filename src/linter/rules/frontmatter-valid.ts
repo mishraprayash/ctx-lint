@@ -30,7 +30,8 @@ export const frontmatterValid: LintRule = {
     for (const [key, value] of Object.entries(data)) {
       const field = spec.fields[key];
       if (!field) {
-        const near = closest(key, known);
+        const hinted = spec.hints?.[key];
+        const near = hinted ? [hinted] : closest(key, known);
         ctx.report({
           message: `Unknown frontmatter key "${key}" for ${spec.label}.${near.length > 0 ? ` Did you mean ${orList(near)}?` : ` Known keys: ${known.join(', ')}.`}`,
           range: keyRange(ctx, key),

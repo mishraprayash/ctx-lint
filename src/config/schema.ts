@@ -8,16 +8,17 @@ import { z } from 'zod';
 
 const severity = z.enum(['error', 'warn', 'off']);
 
-const markdownTarget = (output: string) =>
+/** A single-file markdown target (CLAUDE.md, AGENTS.md) with a choice of scoped-rule layouts. */
+const markdownTarget = <const M extends readonly [string, ...string[]]>(
+  output: string,
+  modes: M,
+  defaultMode: M[number],
+  modeHelp: string,
+) =>
   z.strictObject({
     enabled: z.boolean().default(true).describe('Generate this target during `ctx-lint sync`.'),
     output: z.string().min(1).default(output).describe('Output file, relative to the repo root.'),
-    scopedRules: z
-      .enum(['sections', 'nested'])
-      .default('sections')
-      .describe(
-        'How path-scoped rules are emitted: as sections of the root file, or as nested files in the matching directories.',
-      ),
+    scopedRules: z.enum(modes).default(defaultMode).describe(modeHelp),
   });
 
 const dirTarget = (outputDir: string, enabled: boolean) =>
@@ -77,8 +78,18 @@ export const configSchema = z
 
     targets: z
       .strictObject({
-        claude: markdownTarget('CLAUDE.md').prefault({}),
-        agents: markdownTarget('AGENTS.md').prefault({}),
+        claude: markdownTarget(
+          'CLAUDE.md',
+          ['rules', 'sections', 'nested'],
+          'rules',
+          'How path-scoped rules are emitted: `.claude/rules/*.md` files with `paths` (loaded only for matching files), sections of CLAUDE.md, or nested CLAUDE.md files.',
+        ).prefault({}),
+        agents: markdownTarget(
+          'AGENTS.md',
+          ['sections', 'nested'],
+          'sections',
+          'How path-scoped rules are emitted: as sections of AGENTS.md, or as nested AGENTS.md files.',
+        ).prefault({}),
         cursor: dirTarget('.cursor/rules', true).prefault({}),
         copilot: copilotTarget.prefault({}),
         windsurf: dirTarget('.windsurf/rules', false).prefault({}),

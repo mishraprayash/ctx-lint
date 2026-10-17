@@ -26,7 +26,12 @@ export function createProgram(
     .configureOutput({ writeOut: io.stdout, writeErr: io.stderr })
     .exitOverride();
 
-  for (const command of [checkCommand(runtime), syncCommand(), auditCommand(), initCommand()]) {
+  for (const command of [
+    checkCommand(runtime),
+    syncCommand(runtime),
+    auditCommand(),
+    initCommand(runtime),
+  ]) {
     // Subcommands inherit the output and exit behavior of the root program.
     command.configureOutput({ writeOut: io.stdout, writeErr: io.stderr }).exitOverride();
     program.addCommand(command);

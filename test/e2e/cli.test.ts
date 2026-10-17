@@ -1,4 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execa } from 'execa';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -67,5 +70,32 @@ describe('built cli', () => {
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('No problems found');
+  });
+
+  it('sync: conflict exits 1, --force writes, --check passes, then fails after an edit', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ctx-lint-e2e-'));
+    try {
+      await cp(demo, dir, { recursive: true });
+      const sync = (...args: string[]) =>
+        execa('node', [cli, '--no-color', '--cwd', dir, 'sync', ...args], { reject: false });
+
+      const conflict = await sync();
+      expect(conflict.exitCode).toBe(1);
+      expect(conflict.stderr).toContain('CLAUDE.md: exists and has no ctx-lint markers');
+
+      const forced = await sync('--force');
+      expect(forced.exitCode).toBe(0);
+      expect(forced.stdout).toContain('✔ 7 created, 1 updated, 0 deleted, 0 unchanged');
+      expect((await sync('--check')).exitCode).toBe(0);
+
+      await cp(path.join(dir, 'AGENTS.md'), path.join(dir, 'CLAUDE.md'));
+      const drift = await sync('--check');
+      expect(drift.exitCode).toBe(1);
+      expect(drift.stdout).toContain('out of date');
+
+      expect((await sync('--target', 'nope')).exitCode).toBe(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
