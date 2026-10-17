@@ -167,10 +167,16 @@ export interface Candidate {
   file: SourceFile;
 }
 
+// As built (Phase 2, src/core/references.ts): the plan's single `command` kind is split into
+// `script` / `target` / `bin`, one per rule. Every reference also carries the exact `range`
+// of the referenced token (e.g. just `test:e2e` in `npm run test:e2e`).
 export type Reference =
-  | { kind: 'path'; value: string; isDir: boolean; isGlob: boolean; anchor?: string; confidence: Confidence; candidate: Candidate }
-  | { kind: 'command'; tool: CommandTool; script: string; workspace?: string; confidence: Confidence; candidate: Candidate }
-  | { kind: 'package'; name: string; ecosystem: 'npm'; confidence: Confidence; candidate: Candidate };
+  | { kind: 'path'; value: string; isDir: boolean; isGlob: boolean; fromFile: boolean; bare: boolean; rooted: boolean; anchor?: string; … }
+  | { kind: 'script'; tool: 'npm' | 'pnpm' | 'yarn' | 'bun' | 'node'; name: string; workspace?: string; recursive?: boolean; dir?: string; ifPresent?: boolean; orBin?: boolean; … }
+  | { kind: 'target'; tool: 'make' | 'just'; name: string; dir?: string; file?: string; … }
+  | { kind: 'bin'; tool: PackageManager; name: string; … }
+  | { kind: 'package'; name: string; ecosystem: 'npm'; negated: boolean; … };
+// Non-references come back as { kind: 'ignored', reason } so `--dump-refs --debug` can explain them.
 
 export type Confidence = 'high' | 'medium' | 'low';
 
@@ -681,11 +687,17 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
   - Running `check` in *this* repo picks up `test/fixtures/**`, so add `check.exclude` when dogfooding (Phase 6).
 
 ### Phase 2 — Extraction & classification
-- [ ] `extract.ts` for inline code, fenced code (per line, with prompt stripping), links
-- [ ] `shell.ts` mini tokenizer (env prefixes, `&&`, `||`, `;`, `|`, quotes, `\` continuations)
-- [ ] `classify/` ignore patterns → command → path → package, with confidence
-- [ ] Table-driven classifier test suite (≥ 200 cases), plus the `false-positives` fixture
+- [x] `extract.ts` for inline code, fenced code (per line, with prompt stripping), links
+- [x] `shell.ts` mini tokenizer (env prefixes, `&&`, `||`, `;`, `|`, quotes, `\` continuations)
+- [x] `classify/` ignore patterns → command → path → package, with confidence
+- [x] Table-driven classifier test suite (≥ 200 cases), plus the `false-positives` fixture
 - **Done when:** the classifier suite passes and `--debug --dump-refs` prints typed references with ranges for the demo `CLAUDE.md`.
+- **Status (2026-10-17):** done. 305 table-driven classifier cases (`test/unit/parsers/classify.cases.ts`); the false-positive gate passes; `ctx-lint check --dump-refs [--debug] [--format json]` works. `examples/demo/` was created early (Phase 3 adds its expected-output test). `pnpm verify`: 393 unit + 2 e2e tests. Additions beyond the plan:
+  - Interpreter arguments and direct scripts become path references (`bash scripts/x.sh`, `./bin/dev`, `python manage.py`, `bun run src/index.ts`), and so does `cd dir`.
+  - `node --run <script>` (Node 22), `just`, yarn/pnpm workspace forms, `--if-present`, and `orBin` for `pnpm x` / `yarn x` / `bun x`, which fall back to running a binary.
+  - Bare file names (`package.json`) are flagged `bare` (resolve anywhere by basename), and markdown links resolve relative to their file.
+  - Package mentions: a weak cue ("use `x`") only counts for one-word names; `kebab-case`-style tokens need a strong cue ("library", "package"). Scoped names always count. "instead of / avoid / don't use / over" mark the mention `negated`.
+  - Known limitations: bare `res.json` style method mentions are handled by a receiver list; lowercase dotted tokens like `console.log` classify as low-confidence packages (skipped by default).
 
 ### Phase 3 — `check` end-to-end
 - [ ] `manifests/npm` (root + workspaces from `package.json` `workspaces` or `pnpm-workspace.yaml`; lockfile → package manager), `manifests/make` (targets, `include` one level, ignores `.PHONY`/special/pattern targets), `manifests/just`
@@ -770,6 +782,7 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 9 | Pin TypeScript to 6.x | TS 7 ships no compiler API; tsup 9 + rollup-plugin-dts break on it. Revisit when tsup supports TS 7 | 2026-10-17 |
 | 10 | `FileIndex` uses opaque directories + lazy, case-exact lookups instead of indexing `node_modules` etc. | Fast walks on big repos while references into heavy dirs still resolve exactly (§5.1) | 2026-10-17 |
 | 11 | Config is JSONC; `pnpm ci` renamed to `pnpm verify` | The plan's own config examples use comments; `pnpm ci` is a reserved pnpm command | 2026-10-17 |
+| 12 | `command` reference kind split into `script` / `target` / `bin` | One kind per rule keeps rules simple and the JSON output self-describing | 2026-10-17 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
 1. **Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files? Leaning `sections`, which is more predictable and keeps everything in one file. Check whether Claude Code's current path-scoped rule support (e.g. a `.claude/rules/` directory with path frontmatter) is stable enough to be a third mode.

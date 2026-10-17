@@ -58,6 +58,19 @@ describe('cli program', () => {
     );
   });
 
+  it('resolves file arguments relative to --cwd and dumps references', async () => {
+    const io = capture();
+    const demo = fileURLToPath(new URL('../../../examples/demo', import.meta.url));
+    const code = await run(
+      argv('--cwd', demo, 'check', '--dump-refs', '--format', 'json', 'CLAUDE.md'),
+      io,
+    );
+    expect(code).toBe(ExitCode.Success);
+    const refs = JSON.parse(io.out) as { kind: string; file: string }[];
+    expect(refs.length).toBeGreaterThan(5);
+    expect(refs.every((r) => r.file === 'CLAUDE.md' && r.kind !== 'ignored')).toBe(true);
+  });
+
   it('exits with Fatal when an explicit file does not exist', async () => {
     const io = capture();
     expect(await run(argv('check', '--list-files', 'definitely-missing.md'), io)).toBe(

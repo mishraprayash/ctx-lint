@@ -1,0 +1,16 @@
+{
+  "name": "ctx-lint-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.0"
+  }
+}
