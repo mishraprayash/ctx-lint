@@ -756,7 +756,7 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 - [x] `ctx-lint explain <rule>` (prints the rule docs in the terminal)
 - [x] Dogfood: this repo's `CLAUDE.md` / `AGENTS.md` come from `.context/rules`
 - **Done when:** on the corpus (manually triaged), < 10% of reported errors and < 30% of reported warnings are false positives, and the benchmark is under target. (Was "< 2% of all diagnostics"; see Decision 26.)
-- **Status (2026-10-17):** done, with errors right at the bar: 3 of 29 errors are false (10.3%; one of the three, `docs/claude/clickhouse-connections.md` in PostHog, may be a real stale path) and 8 of 28 warnings (29%). `pnpm verify`: 531 unit + 7 e2e tests. As built:
+- **Status (2026-10-17):** done, with errors right at the bar: 3 of 29 errors are false (10.3%; one of the three, `docs/claude/clickhouse-connections.md` in PostHog, may be a real stale path) and 8 of 28 warnings (29%). `pnpm verify`: 533 unit + 7 e2e tests. As built:
   - **Benchmark** (`pnpm bench`, 50k files, 20 instruction files): `check` 0.31 s (target < 2 s). `FileIndex.hasMatch` walks only a glob's static prefix and stops at the first match (`glob-matches` was 1.3 s before).
   - **`explain`** lists the rules, or prints `docs/rules/<id>.md`, and suggests a rule id for typos.
   - **Renames:** one `git log -M --diff-filter=R` (at most 1,000 commits, 3 s timeout, only when a path is missing) gives "It was renamed to X in a1b2c3d" for files and directories, and `--fix` applies it.
@@ -773,6 +773,7 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
     - Symlinked instruction files (`CLAUDE.md` → `AGENTS.md`) are linted once.
     - Commands under a `# from the root` comment in a code block run at the repo root. Paths after a modal verb ("may use `x`") are low.
     - Cursor `.mdc` frontmatter is read leniently (`globs: *.ts, src/` is what Cursor writes), and slash-free frontmatter globs match at any depth.
+  - **Held-out check** (`--only`, repos the heuristics were never tuned on): vite, claude-code-action and uv have 4 instruction files and about 74 checked references. That gave 1 diagnostic, a false-positive warning ("Use `act` tool"), since fixed. There were no errors, and none of the skipped paths were actually missing. The sample is small, so the numbers above remain the better estimate.
   - **What's left** is mostly unknowable offline: runtime or build-output paths, folders outside the repo, object-store keys, and paths relative to another package named in the same sentence.
 
 ### Phase 7 — Release v0.1.0

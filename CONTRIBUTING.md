@@ -25,7 +25,7 @@ pnpm install
 | `pnpm schema` | Regenerate `schema/config.schema.json` after changing the config schema |
 | `pnpm bench` | Time `check` on a synthetic 50k-file repo (target: under 2 s) |
 | `pnpm calibrate` | Refit the heuristic tokenizer against o200k and print its error |
-| `pnpm corpus [dir] [--limit N] [--offline]` | Fetch file-tree skeletons of the public repos in `test/corpus/repos.json` (4 at a time, resumable), lint them and write a triage report |
+| `pnpm corpus [dir] [--limit N] [--only a/b,c/d] [--offline]` | Fetch file-tree skeletons of the public repos in `test/corpus/repos.json` (4 at a time, resumable), lint them and write a triage report. Use `--only` on repos the heuristics weren't tuned on for an unbiased check |
 
 Try your local build with `node dist/cli.js <command>`.
 

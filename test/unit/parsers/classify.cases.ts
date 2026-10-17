@@ -358,6 +358,9 @@ export const PACKAGES: readonly Case[] = [
   ['Always use `pino`.', ['pkg pino medium']],
   ['Do not import `pytest` here.', ['pkg pytest medium negated']],
   ['Use `render` on triggers.', ['ignored not-a-reference']],
+  // Held-out corpus (claude-code-action): a CLI tool, not a library.
+  ['Use `act` tool to run workflows locally.', ['ignored not-a-reference']],
+  ['Install the `gh` CLI first.', ['ignored not-a-reference']],
   ['Use `select` instead of `include`.', ['ignored not-a-reference', 'ignored not-a-reference']],
 ];
 

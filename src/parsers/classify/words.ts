@@ -765,6 +765,12 @@ export const PACKAGE_STOPLIST: ReadonlySet<string> = new Set([
 
 /** Nouns right after a token that show it's a concept, not a library ("`camel` case"). */
 export const NON_PACKAGE_NOUNS: ReadonlySet<string> = new Set([
+  // "Use the `act` tool", "the `gh` CLI": a program you run, not a library you import.
+  'binary',
+  'cli',
+  'executable',
+  'tool',
+  'tools',
   'alias',
   'env',
   'hook',

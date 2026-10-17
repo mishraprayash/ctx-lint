@@ -16,24 +16,30 @@ import { createContext } from '../src/api/context.js';
 const READ =
   /(?:\.md|\.mdc|\.mk|\/?\.cursorrules|\/?\.windsurfrules|(?:^|\/)(?:package\.json|pnpm-workspace\.yaml|[Mm]akefile|GNUmakefile|[Jj]ustfile|tsconfig[^/]*\.json|jsconfig\.json|\.gitignore))$/;
 
-// `pnpm corpus [dir] [--offline] [--limit N]`: --offline lints only repos that were already
-// fetched; --limit uses only the first N repos in repos.json.
+// `pnpm corpus [dir] [--offline] [--limit N] [--only a/b,c/d]`: --offline lints only repos that
+// were already fetched; --limit uses the first N repos in repos.json, --only the ones named.
 // Fetches are resumable: a repo is fetched again only if its last fetch didn't finish.
 const args = process.argv.slice(2);
 const offline = args.includes('--offline');
 const outDir = path.resolve(
-  args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--limit') ??
+  args.find((a, i) => !a.startsWith('--') && !['--limit', '--only'].includes(args[i - 1] ?? '')) ??
     path.join(os.tmpdir(), 'ctx-lint-corpus'),
 );
 const { repos: allRepos } = JSON.parse(
   readFileSync(new URL('../test/corpus/repos.json', import.meta.url), 'utf8'),
 ) as { repos: string[] };
 // `--limit 10`: only the first N repos (each skeleton is small, but the clones add up).
-const limitArg = args.find((a) => a.startsWith('--limit'));
-const limit = limitArg
-  ? Number(limitArg.includes('=') ? limitArg.split('=')[1] : args[args.indexOf(limitArg) + 1])
-  : Number.POSITIVE_INFINITY;
-const repos = allRepos.slice(0, limit);
+const option = (name: string): string | undefined => {
+  const arg = args.find((a) => a === name || a.startsWith(`${name}=`));
+  if (arg === undefined) return undefined;
+  return arg.includes('=') ? arg.slice(name.length + 1) : args[args.indexOf(arg) + 1];
+};
+const limit = Number(option('--limit') ?? Number.POSITIVE_INFINITY);
+// `--only vitejs/vite,astral-sh/uv`: a held-out check on repos the heuristics weren't tuned on.
+const only = option('--only')?.split(',').filter(Boolean);
+const unknown = only?.filter((repo) => !allRepos.includes(repo)) ?? [];
+if (unknown.length > 0) throw new Error(`Not in repos.json: ${unknown.join(', ')}`);
+const repos = only ?? allRepos.slice(0, limit);
 
 /** Repos fetched at the same time. Fetching is network-bound; linting runs afterwards. */
 const CONCURRENCY = 4;
