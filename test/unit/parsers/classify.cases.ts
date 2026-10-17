@@ -207,6 +207,8 @@ export const INLINE_COMMANDS: readonly Case[] = [
   ['`pnpm -C packages/web build`', ['script pnpm build medium dir=packages/web orBin']],
   ['`pnpm -Cpackages/web build`', ['script pnpm build medium dir=packages/web orBin']],
   ['`pnpm vitest run`', ['script pnpm vitest medium orBin']],
+  ['`pnpm test:e2e`', ['script pnpm test:e2e high']],
+  ['`yarn lint:fix`', ['script yarn lint:fix high']],
   ['`pnpm why zod`', ['ignored not-a-reference']],
   // yarn
   ['`yarn build`', ['script yarn build medium orBin']],

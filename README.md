@@ -3,7 +3,7 @@
 > Context linter & sync for AI coding agents.
 
 > [!WARNING]
-> Early development. The commands below are planned and not implemented yet. See [PLAN.md](PLAN.md) for the roadmap.
+> Early development: `check` works; `sync` and `audit` are next. See [PLAN.md](PLAN.md) for the roadmap.
 
 AI coding agents each read their own instruction file (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, …). These files drift apart, and they rot: they point at deleted files, renamed directories, scripts that no longer exist, and packages you removed. Agents trust them anyway.
 
@@ -21,7 +21,40 @@ AI coding agents each read their own instruction file (`CLAUDE.md`, `AGENTS.md`,
 npx ctx-lint check
 ```
 
-Requires Node.js ≥ 22.12.
+```
+CLAUDE.md
+   7:24  error    Path "src/auth/guards/" does not exist. Did you mean "src/auth/guard.ts"?        path-exists
+  13:42  error    Script "test:e2e" is not defined in package.json. Available: build, lint, test.  script-exists
+  15:40  error    Make target "migrate" not found in Makefile. Available: build, clean.            make-target-exists
+   24:8  warning  "zod" is referenced as a library but isn't in any package.json.                  dependency-installed
+
+✖ 4 problems (3 errors, 1 warning)
+```
+
+Try it on the [demo project](examples/demo). Requires Node.js ≥ 22.12.
+
+### `check` options
+
+| Option | |
+|---|---|
+| `--format <stylish\|json\|compact\|github\|sarif>` | Output format. `github` annotates PRs; `sarif` feeds code scanning. |
+| `--fix` | Rewrite references to moved or mis-cased files when the fix is unambiguous. |
+| `--max-warnings <n>` | Fail when there are more than `n` warnings. |
+| `--quiet` | Errors only. |
+| `--rule <id>=<error\|warn\|off>` | Override a rule (repeatable). |
+| `--no-deps` | Skip the dependency check. |
+| `--dump-refs` | Show what ctx-lint found in each file (add `--debug` for what it ignored, and why). |
+
+Exit codes: `0` no errors, `1` errors (or too many warnings), `2` usage or config error.
+
+Rules: [path-exists](docs/rules/path-exists.md) · [path-case](docs/rules/path-case.md) ·
+[glob-matches](docs/rules/glob-matches.md) · [link-anchor](docs/rules/link-anchor.md) ·
+[script-exists](docs/rules/script-exists.md) · [make-target-exists](docs/rules/make-target-exists.md) ·
+[bin-exists](docs/rules/bin-exists.md) · [package-manager-mismatch](docs/rules/package-manager-mismatch.md) ·
+[dependency-installed](docs/rules/dependency-installed.md) · [frontmatter-valid](docs/rules/frontmatter-valid.md) ·
+[unused-disable](docs/rules/unused-disable.md)
+
+Silence a line with `<!-- ctx-lint-disable-next-line path-exists -- reason -->`.
 
 ## Contributing
 

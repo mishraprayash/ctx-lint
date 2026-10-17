@@ -1,0 +1,8 @@
+---
+description: API rules
+glob: src/**
+globs: services/**
+alwaysApply: "yes"
+---
+
+Use the API client.

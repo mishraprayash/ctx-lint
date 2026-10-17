@@ -98,7 +98,7 @@ export const configSchema = z
           .describe('Rule severity overrides, e.g. { "dependency-installed": "off" }.'),
         ignorePaths: z
           .array(z.string())
-          .default(['dist/**', 'build/**', 'coverage/**', '.env*'])
+          .default(['dist/**', 'build/**', 'coverage/**', 'node_modules/**', '.env*'])
           .describe('Referenced paths that may legitimately be missing (globs).'),
         ignorePatterns: z
           .array(regex)

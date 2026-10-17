@@ -700,14 +700,21 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
   - Known limitations: bare `res.json` style method mentions are handled by a receiver list; lowercase dotted tokens like `console.log` classify as low-confidence packages (skipped by default).
 
 ### Phase 3 — `check` end-to-end
-- [ ] `manifests/npm` (root + workspaces from `package.json` `workspaces` or `pnpm-workspace.yaml`; lockfile → package manager), `manifests/make` (targets, `include` one level, ignores `.PHONY`/special/pattern targets), `manifests/just`
-- [ ] Rule engine with severity config, inline disables, `unused-disable`
-- [ ] All rules in §5.4 except `generated-file-modified` (that comes in Phase 4)
-- [ ] Suggestions (basename + Levenshtein), `--fix`
-- [ ] Reporters: stylish, json, compact, github, sarif
-- [ ] Exit codes, `--max-warnings`, `--quiet`, `--rule`
-- [ ] `examples/demo/` + E2E snapshot of its output
+- [x] `manifests/npm` (root + workspaces from `package.json` `workspaces` or `pnpm-workspace.yaml`; lockfile → package manager), `manifests/make` (targets, `include` one level, ignores `.PHONY`/special/pattern targets), `manifests/just`
+- [x] Rule engine with severity config, inline disables, `unused-disable`
+- [x] All rules in §5.4 except `generated-file-modified` (that comes in Phase 4)
+- [x] Suggestions (basename + Levenshtein), `--fix`
+- [x] Reporters: stylish, json, compact, github, sarif
+- [x] Exit codes, `--max-warnings`, `--quiet`, `--rule`
+- [x] `examples/demo/` + E2E snapshot of its output
 - **Done when:** `ctx-lint check` in `examples/demo` prints exactly the expected report from §9 and exits 1. `false-positives` gives 0 diagnostics. The SARIF output validates against the SARIF 2.1.0 schema.
+- **Status (2026-10-17):** done. The demo output is snapshotted in `examples/demo/expected-output.txt` (e2e test, exit 1). The false-positive fixture gives 0 diagnostics. SARIF validates against the vendored OASIS schema (`test/schemas/`). `test/fixtures/monorepo` exercises every rule. Each rule has a docs page in `docs/rules/`, kept in sync by a test. `pnpm verify`: 438 unit + 5 e2e tests. As built:
+  - **Severity follows confidence:** high-confidence references report at the configured severity; medium ones are capped at warning. Rules can also downgrade a single report (e.g. a script defined in another workspace, a Make target that may be computed).
+  - **path-exists:** skips missing paths that `.gitignore` would ignore (`.env.local`, `out/`). It accepts bare names anywhere and suffix matches (`components/Button.tsx`). Suggestions are shown the way the file's author would write them.
+  - **script-exists:** uses the nearest `package.json`; workspace selectors and `-r`; npm's `start`/`restart` fallbacks; `orBin`. Bare `pnpm x:y` is high confidence (a name with a colon can't be a binary).
+  - **bin-exists:** checks `node_modules/.bin` when installed, otherwise declared dependencies plus a known bin→package map. It never guesses when nothing is installed.
+  - `unused-disable` also flags unknown rule ids in directives. `check.ignorePaths` now defaults to include `node_modules/**`.
+  - This repo has its own `.context/config.json`, which excludes `examples/**` and `test/fixtures/**` (they contain intentional problems).
 
 ### Phase 4 — `sync`
 - [ ] Source loader + frontmatter validation (zod) → `RuleIR[]`
@@ -783,9 +790,12 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 10 | `FileIndex` uses opaque directories + lazy, case-exact lookups instead of indexing `node_modules` etc. | Fast walks on big repos while references into heavy dirs still resolve exactly (§5.1) | 2026-10-17 |
 | 11 | Config is JSONC; `pnpm ci` renamed to `pnpm verify` | The plan's own config examples use comments; `pnpm ci` is a reserved pnpm command | 2026-10-17 |
 | 12 | `command` reference kind split into `script` / `target` / `bin` | One kind per rule keeps rules simple and the JSON output self-describing | 2026-10-17 |
+| 13 | Medium-confidence references report as warnings at most | Precision over recall (§1.3): only references we're sure about can fail CI | 2026-10-17 |
+| 14 | Missing-but-gitignored paths are not reported | They're local or generated files (`.env.local`, build output), not context rot | 2026-10-17 |
+| 15 | Open Question 2 resolved: a script missing where it runs but defined in another package is a warning with a "run it there" hint | Usually means "wrong directory", not "deleted" | 2026-10-17 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
 1. **Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files? Leaning `sections`, which is more predictable and keeps everything in one file. Check whether Claude Code's current path-scoped rule support (e.g. a `.claude/rules/` directory with path frontmatter) is stable enough to be a third mode.
-2. **Phase 3:** Should a script that exists in *some* workspace but not the nearest one be an error or a warning? Proposed: a warning with a hint.
+2. ~~**Phase 3:** Should a script that exists in *some* workspace but not the nearest one be an error or a warning?~~ Resolved: a warning with a hint (Decision 15).
 3. **Phase 7:** Final npm package name and GitHub org.
 4. **Phase 2:** Should `check` lint paths in fenced code blocks of non-shell languages (e.g. `import x from './foo'` in a TS example)? Proposed: no in v1, since that's generic example code.

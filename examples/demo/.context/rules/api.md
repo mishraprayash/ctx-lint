@@ -4,5 +4,5 @@ globs: src/api/**/*.ts
 alwaysApply: false
 ---
 
-- Route handlers live in `src/api/routes/`.
+- Route handlers are mounted in `src/server.ts`.
 - Validate request bodies before use.

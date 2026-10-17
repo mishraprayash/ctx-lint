@@ -185,6 +185,7 @@
             "dist/**",
             "build/**",
             "coverage/**",
+            "node_modules/**",
             ".env*"
           ],
           "description": "Referenced paths that may legitimately be missing (globs).",

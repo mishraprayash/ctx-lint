@@ -1,0 +1,3 @@
+- Run `pnpm dev` here.
+- Build from here with `pnpm build`.
+- The entry is `./src/app.tsx`.

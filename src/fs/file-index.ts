@@ -68,6 +68,8 @@ export class FileIndex {
   /** Lazy lookups below opaque directories: absolute dir → (name → type). */
   private readonly lazyDirs = new Map<string, Map<string, EntryType> | null>();
   private sortedFiles: string[] | undefined;
+  /** @internal Every .gitignore seen during the walk. */
+  readonly gitignoreScopes: GitignoreScope[] = [];
 
   private constructor(root: string) {
     this.root = root;
@@ -169,6 +171,50 @@ export class FileIndex {
     return this.files().filter((file) => isMatch(file));
   }
 
+  /** Indexed files and directories matching any of the globs, sorted. */
+  matchAny(globs: string | readonly string[]): string[] {
+    const list = typeof globs === 'string' ? [globs] : [...globs];
+    if (list.length === 0) return [];
+    const isMatch = picomatch(list, { dot: true });
+    return [...this.entries.keys()].filter((p) => p !== '' && isMatch(p)).sort();
+  }
+
+  /** Indexed entries whose path ends with `/<suffix>` (e.g. `components/Button.tsx`), sorted. */
+  withSuffix(suffix: string, type?: EntryType): string[] {
+    const needle = `/${normalizeRel(suffix)}`;
+    const out: string[] = [];
+    for (const [p, entry] of this.entries) {
+      if (p.endsWith(needle) && (type === undefined || entry.type === type)) out.push(p);
+    }
+    return out.sort();
+  }
+
+  /**
+   * Whether a path, existing or not, would be gitignored. A missing path that is gitignored is
+   * a local or generated file (`.env.local`, `out/`), not context rot.
+   */
+  wouldBeIgnored(rel: string, type: EntryType = 'file'): boolean {
+    const p = normalizeRel(rel);
+    if (p === '') return false;
+    for (const { base, matcher } of this.gitignoreScopes) {
+      if (base !== '' && !p.startsWith(`${base}/`)) continue;
+      const relToScope = base === '' ? p : p.slice(base.length + 1);
+      if (matcher.ignores(type === 'dir' ? `${relToScope}/` : relToScope)) return true;
+      // A file below an ignored directory is ignored too.
+      const segments = relToScope.split('/');
+      for (let i = 1; i < segments.length; i++) {
+        if (matcher.ignores(`${segments.slice(0, i).join('/')}/`)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** True when `rel` is, or is below, a directory that was not walked (node_modules, dist…). */
+  isUnindexed(rel: string): boolean {
+    const p = normalizeRel(rel);
+    return this.entries.get(p)?.opaque === true || this.opaqueAncestor(p) !== null;
+  }
+
   get size(): { files: number; dirs: number } {
     let files = 0;
     for (const entry of this.entries.values()) if (entry.type === 'file') files++;
@@ -237,7 +283,7 @@ export class FileIndex {
   }
 }
 
-interface GitignoreScope {
+export interface GitignoreScope {
   /** Repo-relative directory the .gitignore lives in. */
   base: string;
   matcher: Ignore;
@@ -274,7 +320,9 @@ class Walker {
     let activeScopes = scopes;
     if (this.gitignore && dirents.some((d) => d.name === '.gitignore' && d.isFile())) {
       const text = await this.limited(() => readFile(path.join(absDir, '.gitignore'), 'utf8'));
-      activeScopes = [...scopes, { base: dir, matcher: ignore().add(text) }];
+      const scope = { base: dir, matcher: ignore().add(text) };
+      this.index.gitignoreScopes.push(scope);
+      activeScopes = [...scopes, scope];
     }
 
     const subdirs: string[] = [];

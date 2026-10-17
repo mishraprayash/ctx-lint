@@ -113,6 +113,19 @@ class Emitter {
     });
   }
 
+  /**
+   * `pnpm x` / `yarn x` / `bun x`: a script, or else a binary of that name. Names with a colon
+   * (`test:e2e`) can only be scripts, so those are certain.
+   */
+  bareScript(
+    tool: PackageManager,
+    word: Word,
+    extra: Extras<ScriptReference, 'workspace' | 'recursive' | 'dir' | 'ifPresent'> = {},
+  ): void {
+    if (word.value.includes(':')) this.script(tool, word, 'high', extra);
+    else this.script(tool, word, 'medium', { ...extra, orBin: true });
+  }
+
   target(
     tool: TargetReference['tool'],
     word: Word,
@@ -326,7 +339,7 @@ function pnpm(args: readonly Word[], emit: Emitter): void {
     emit.bin('pnpm', next);
   } else if (!PNPM_BUILTINS.has(sub.value)) {
     // pnpm runs a script by that name, or falls back to `pnpm exec`.
-    emit.script('pnpm', sub, 'medium', { ...extra, orBin: true });
+    emit.bareScript('pnpm', sub, extra);
   }
 }
 
@@ -342,9 +355,8 @@ function yarn(args: readonly Word[], emit: Emitter): void {
     if (!workspace || workspace.dynamic || !inner) return;
     if (inner.value === 'run')
       emit.script('yarn', innerScript, 'high', { workspace: workspace.value, dir });
-    else if (!YARN_BUILTINS.has(inner.value)) {
-      emit.script('yarn', inner, 'medium', { workspace: workspace.value, dir, orBin: true });
-    }
+    else if (!YARN_BUILTINS.has(inner.value))
+      emit.bareScript('yarn', inner, { workspace: workspace.value, dir });
     return;
   }
   if (sub.value === 'workspaces') {
@@ -360,7 +372,7 @@ function yarn(args: readonly Word[], emit: Emitter): void {
   } else if (sub.value === 'start') {
     emit.script('yarn', sub, 'medium', { dir });
   } else if (!YARN_BUILTINS.has(sub.value)) {
-    emit.script('yarn', sub, 'medium', { dir, orBin: true });
+    emit.bareScript('yarn', sub, { dir });
   }
 }
 
@@ -381,7 +393,7 @@ function bun(args: readonly Word[], emit: Emitter): void {
   } else if (sub.value === 'x') {
     emit.bin('bun', next);
   } else if (!BUN_BUILTINS.has(sub.value)) {
-    if (!emitFile(sub, emit)) emit.script('bun', sub, 'medium', { ...extra, orBin: true });
+    if (!emitFile(sub, emit)) emit.bareScript('bun', sub, extra);
   }
 }
 

@@ -53,5 +53,11 @@
         }
       }
     }
-  ]
+  ],
+  "json": {
+    "parser": {
+      "allowComments": true,
+      "allowTrailingCommas": true
+    }
+  }
 }
