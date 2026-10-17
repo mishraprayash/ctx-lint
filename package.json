@@ -1,0 +1,67 @@
+{
+  "name": "ctx-lint",
+  "version": "0.0.0",
+  "description": "Lint, sync and budget the instruction files of AI coding agents (CLAUDE.md, AGENTS.md, Cursor rules, Copilot instructions).",
+  "keywords": [
+    "ai",
+    "agents",
+    "claude",
+    "cursor",
+    "copilot",
+    "agents-md",
+    "linter",
+    "cli",
+    "context"
+  ],
+  "license": "MIT",
+  "author": "Prayash Mishra",
+  "type": "module",
+  "bin": {
+    "ctx-lint": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@10.7.1",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run test/unit",
+    "test:watch": "vitest",
+    "test:e2e": "pnpm build && vitest run test/e2e",
+    "coverage": "vitest run test/unit --coverage",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^5.0.5",
+    "execa": "^10.1.1",
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

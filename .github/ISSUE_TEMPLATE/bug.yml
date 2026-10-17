@@ -1,0 +1,27 @@
+name: Bug report
+description: Something crashed or behaved incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The command you ran and a minimal set of files to reproduce it.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output (run with --debug)
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: ctx-lint version, Node version, OS
+      placeholder: ctx-lint 0.1.0, Node 22.12, macOS 15
