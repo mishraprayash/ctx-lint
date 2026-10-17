@@ -1,69 +1,60 @@
 # ctx-lint
 
-> Context linter & sync for AI coding agents.
+> Lint, sync and budget the instruction files of AI coding agents.
 
 > [!WARNING]
-> Pre-release: `check`, `sync` and `audit` work; the first npm release is next. See [PLAN.md](PLAN.md) for the roadmap.
+> Pre-release: `check`, `sync` and `audit` work, and the first npm release is next. Until then,
+> [build it from source](docs/getting-started.md#requirements). See [PLAN.md](PLAN.md) for the roadmap.
 
-AI coding agents each read their own instruction file (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, …). These files drift apart, and they rot: they point at deleted files, renamed directories, scripts that no longer exist, and packages you removed. Agents trust them anyway.
+Coding agents each read their own instruction files: `CLAUDE.md`, `AGENTS.md`,
+`.cursor/rules/*.mdc`, `.github/copilot-instructions.md` and more. These files go wrong in three ways:
 
-`ctx-lint` is a fast, offline CLI that never calls an LLM:
+- **They rot.** Code moves, but the instructions still point at deleted files, renamed
+  directories, scripts that no longer exist and libraries you removed. Agents follow them anyway.
+- **They drift apart.** Every agent wants its own format, so the same rules are copied and edited
+  separately.
+- **They grow.** Always-loaded instructions cost tokens on every request.
+
+`ctx-lint` is a fast, offline CLI for all three. It never calls a network service or a language
+model.
 
 | Command | What it does |
 |---|---|
-| `ctx-lint check` | Finds broken file paths, missing `package.json` scripts / Make targets, and missing dependencies in instruction files. Output looks like ESLint, and it exits non-zero on errors for CI. |
-| `ctx-lint sync` | Compiles one source of truth (`.context/rules/*.md`) into every agent's native format. |
-| `ctx-lint audit` | Estimates token cost per agent and warns when the always-on context is over budget. |
+| [`ctx-lint check`](docs/check.md) | Checks every path, glob, link, script, Make target and library the files mention against the repo. Output looks like ESLint's, and it can fail CI. |
+| [`ctx-lint sync`](docs/sync.md) | Compiles one source of truth (`.context/rules/*.md`) into each agent's native format. |
+| [`ctx-lint audit`](docs/audit.md) | Estimates the token cost per agent and fails when the always-on context is over budget. |
 
-## Quick start
+## Check
 
 ```bash
-npx ctx-lint check
+ctx-lint check
 ```
 
 ```
 CLAUDE.md
    7:24  error    Path "src/auth/guards/" does not exist. Did you mean "src/auth/guard.ts"?        path-exists
+   9:16  error    Path "./scripts/deploy.sh" does not exist.                                       path-exists
+  13:42  warning  This repo uses pnpm (pnpm-lock.yaml), but this command uses npm.                 package-manager-mismatch
   13:42  error    Script "test:e2e" is not defined in package.json. Available: build, lint, test.  script-exists
   15:40  error    Make target "migrate" not found in Makefile. Available: build, clean.            make-target-exists
    24:8  warning  "zod" is referenced as a library but isn't in any package.json.                  dependency-installed
-
-✖ 4 problems (3 errors, 1 warning)
 ```
 
-Try it on the [demo project](examples/demo). Requires Node.js ≥ 22.12.
+That's the [demo project](examples/demo): `ctx-lint --cwd examples/demo check`.
 
-### `check` options
+- **Fixes:** missing paths come with the likeliest fix. That's the rename from your git history
+  ("It was renamed to … in a1b2c3d"), the same file elsewhere, or a near-miss name. `--fix`
+  applies the unambiguous ones.
+- **Built for CI:** output as `stylish`, `compact`, `json`, `github` (PR annotations) or `sarif`.
+- **Few false positives:** only references it's sure about can be errors. Anything less certain
+  is a warning or skipped. On ten large public repos, about 1 in 10 errors was a false positive;
+  see [how accurate it is](docs/accuracy.md).
+- **Easy to silence:** `<!-- ctx-lint-disable-next-line path-exists -- reason -->`, or
+  `check.ignorePaths` in the config.
 
-| Option | |
-|---|---|
-| `--format <stylish\|json\|compact\|github\|sarif>` | Output format. `github` annotates PRs; `sarif` feeds code scanning. |
-| `--fix` | Rewrite references to moved or mis-cased files when the fix is unambiguous. |
-| `--max-warnings <n>` | Fail when there are more than `n` warnings. |
-| `--quiet` | Errors only. |
-| `--rule <id>=<error\|warn\|off>` | Override a rule (repeatable). |
-| `--no-deps` | Skip the dependency check. |
-| `--dump-refs` | Show what ctx-lint found in each file (add `--debug` for what it ignored, and why). |
+## Sync
 
-Exit codes: `0` no errors, `1` errors (or too many warnings), `2` usage or config error.
-
-Rules: [path-exists](docs/rules/path-exists.md) · [path-case](docs/rules/path-case.md) ·
-[glob-matches](docs/rules/glob-matches.md) · [link-anchor](docs/rules/link-anchor.md) ·
-[script-exists](docs/rules/script-exists.md) · [make-target-exists](docs/rules/make-target-exists.md) ·
-[bin-exists](docs/rules/bin-exists.md) · [package-manager-mismatch](docs/rules/package-manager-mismatch.md) ·
-[dependency-installed](docs/rules/dependency-installed.md) · [frontmatter-valid](docs/rules/frontmatter-valid.md) ·
-[unused-disable](docs/rules/unused-disable.md)
-
-Silence a line with `<!-- ctx-lint-disable-next-line path-exists -- reason -->`. Run
-`ctx-lint explain <rule>` for what a rule checks and how to fix it.
-
-Missing paths come with the likeliest fix: the rename from git history (*"It was renamed to …
-in a1b2c3d"*), the same file name elsewhere, or a near-miss name. tsconfig `paths` aliases
-(`@/components/Button`) are resolved automatically.
-
-## Sync: one source of truth
-
-Write rules once in `.context/rules/*.md`:
+Write each rule once:
 
 ```md
 ---
@@ -74,9 +65,9 @@ globs: ["src/api/**/*.ts"]   # omit for rules that always apply
 ```
 
 ```bash
-npx ctx-lint init --import   # turn your existing CLAUDE.md, AGENTS.md, Cursor/Copilot rules into sources
-npx ctx-lint sync            # write each agent's native files
-npx ctx-lint sync --check    # in CI: fail if generated files are stale or edited by hand
+ctx-lint init --import   # turn your existing CLAUDE.md, AGENTS.md, Cursor and Copilot rules into sources
+ctx-lint sync            # write each agent's files
+ctx-lint sync --check    # in CI: fail if generated files are stale or were edited by hand
 ```
 
 | Agent | Always-applied rules | Path-scoped rules |
@@ -87,15 +78,13 @@ npx ctx-lint sync --check    # in CI: fail if generated files are stale or edite
 | GitHub Copilot | `.github/copilot-instructions.md` | `.github/instructions/*.instructions.md` with `applyTo` |
 | Windsurf / Devin (opt-in) | `.windsurf/rules/*.md` (`always_on`) | `trigger: glob` |
 
-`sync` only touches content it generated. In single files it writes between
-`<!-- ctx-lint:begin -->` / `<!-- ctx-lint:end -->` markers, so hand-written notes around them
-survive. It refuses to overwrite anything else without `--force`, and `--dry-run` shows the diff.
-See [docs/targets.md](docs/targets.md) for every format detail.
+`sync` only touches content it generated, and hand-written notes around it are kept. This
+repository's own `CLAUDE.md` and `AGENTS.md` are generated this way.
 
-## Audit: token budgets
+## Audit
 
 ```bash
-npx ctx-lint audit
+ctx-lint audit
 ```
 
 ```
@@ -104,11 +93,19 @@ npx ctx-lint audit
   Cursor              1,950        2,640    2,500  ✔
 ```
 
-`audit` shows what each agent loads on every request vs. only sometimes (it follows Claude's
-`@imports`, and knows Cursor and Copilot also read `AGENTS.md`). It also lists the largest
-sections and content duplicated across files, and projects the numbers after `sync`. It exits 1
-over budget. The default tokenizer needs no dependencies; its median error against o200k is 3%.
-See [docs/audit.md](docs/audit.md).
+`audit` shows what each agent loads on every request and what only sometimes. It follows
+Claude's `@imports`, and knows that Cursor and Copilot also read `AGENTS.md`. It also lists the
+largest sections and duplicated content.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md)
+- Guides: [check](docs/check.md), [sync](docs/sync.md), [audit](docs/audit.md) and [CI](docs/ci.md).
+- Reference: [configuration](docs/configuration.md), [CLI](docs/cli.md), [rules](docs/README.md#rules),
+  [agent formats](docs/targets.md) and the [programmatic API](docs/api.md).
+- [How it works, and how accurate it is](docs/accuracy.md)
+
+Requires Node.js 22.12 or newer.
 
 ## Contributing
 
