@@ -73,7 +73,8 @@ Plus supporting commands: `ctx-lint init` (scaffold or import) and `ctx-lint exp
 | Markdown AST | `mdast-util-from-markdown` + `micromark-extension-gfm` + `mdast-util-gfm` + `micromark-extension-frontmatter` + `mdast-util-frontmatter` | Exact positions, GFM tables/task lists, frontmatter as a node. |
 | YAML | `yaml` | Good error positions; stringifies deterministically for generated frontmatter. |
 | Schema validation | `zod` (v4) | Validates config and frontmatter; `z.toJSONSchema()` generates the published JSON Schema. |
-| Globbing / matching | `tinyglobby` + `picomatch` | Fast and small; `picomatch` checks whether a glob matches the file index. |
+| Glob matching | `picomatch` | Globs are matched against the in-memory `FileIndex`, so no separate globbing library is needed. |
+| Config parsing | `jsonc-parser` | Lets `.context/config.json` contain comments and trailing commas, with error offsets. |
 | Gitignore | `ignore` | Respects `.gitignore` when building the file index. |
 | Fuzzy suggestions | `fastest-levenshtein` | "Did you mean …?" for renamed files and scripts. |
 | Exact tokenizer (optional) | `gpt-tokenizer` (lazy-loaded, optional dep) | Pure JS, offline, o200k/cl100k. The default is a heuristic, so this never loads unless asked for. |
@@ -87,6 +88,7 @@ Plus supporting commands: `ctx-lint init` (scaffold or import) and `ctx-lint exp
 | Lint/format | `biome` (one fast tool instead of eslint + prettier) |
 | Type check | TypeScript **6.x** (`tsc --noEmit`; TS 7's native compiler has no JS API yet, which tsup's dts bundler needs) with `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` |
 | E2E | `execa` runs the built CLI against fixture repos |
+| Scripts | `tsx` runs TS scripts such as `pnpm schema` (regenerates `schema/config.schema.json`) |
 | Release | `changesets` + GitHub Actions publishing to npm with `--provenance` |
 | Package manager | `pnpm` (lockfile committed), with `packageManager` pinned via Corepack |
 
@@ -336,6 +338,8 @@ CLI flags > `.context/config.json` > built-in defaults. `--config <path>` overri
 <!-- ctx-lint-disable-next-line path-exists -->
 <!-- ctx-lint-disable dependency-installed -->  …  <!-- ctx-lint-enable dependency-installed -->
 <!-- ctx-lint-disable -->                        (disables all rules until the matching enable)
+<!-- ctx-lint-disable-line -->                   (same line, e.g. at the end of a bullet)
+<!-- ctx-lint-disable path-exists -- reason -->  (text after " -- " is a free-form reason)
 ```
 These are HTML comments, so agents don't see them as instructions. A disable comment that suppresses nothing is reported as a warning (`unused-disable`), like ESLint's `--report-unused-disable-directives`.
 
@@ -348,7 +352,7 @@ These are HTML comments, so agents don't see them as instructions. A disable com
 2. Collect instruction files with the union of every `TargetAdapter.detect` glob, plus `check.include`, minus `check.exclude`. Explicit CLI file args (`ctx-lint check CLAUDE.md`) replace discovery.
 3. Tag each file with the agent(s) that read it (used by the reporters and by audit).
 
-> **Gitignored files:** the index contains **every** file except the hard default ignores. `.gitignore` is only used to mark entries as `ignored`, so a doc that mentions a gitignored-but-present file (e.g. `.env.local`) still resolves. Paths that may legitimately be missing (build output, `.env*`) are skipped via `check.ignorePaths`. Paths under `node_modules/` are checked lazily with `fs.stat` instead of being indexed.
+> **Gitignored and heavy directories (as built):** the index walks everything except *opaque* directories: `node_modules`, `.git`, `dist`, `build`, `.next`, `target`, `.venv` … (`DEFAULT_OPAQUE_DIRS`), gitignored directories, and symlinked directories. Opaque directories are recorded but not walked, and paths below them are resolved lazily on disk, one `readdir` per segment, so the lookup stays case-exact. Gitignored *files* are indexed and flagged `ignored`, so a doc mentioning a present-but-ignored `.env.local` still resolves. Paths that may legitimately be missing (build output, `.env*`) are skipped via `check.ignorePaths`.
 
 ### 5.2 Extraction (parse → candidates)
 Walk the mdast:
@@ -665,12 +669,16 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 - **Status (2026-10-17):** done locally. Lint, typecheck, build, unit and e2e tests all pass on macOS / Node 22. CI hasn't run yet (no remote).
 
 ### Phase 1 — Core foundations
-- [ ] `core/` types, errors, logger (`--debug`)
-- [ ] `config/`: zod schema, loader, defaults, JSON Schema generation script → `schema/config.schema.json`
-- [ ] `fs/FileIndex`: walk, gitignore, case-exact lookup, glob match, basename map
-- [ ] `parsers/markdown` + `frontmatter` + `disable-comments`
-- [ ] `targets/` adapters with `detect` + `isAlwaysOn` only (no compile yet); `discovery/`
+- [x] `core/` types, errors, logger (`--debug`)
+- [x] `config/`: zod schema, loader, defaults, JSON Schema generation script → `schema/config.schema.json`
+- [x] `fs/FileIndex`: walk, gitignore, case-exact lookup, glob match, basename map
+- [x] `parsers/markdown` + `frontmatter` + `disable-comments`
+- [x] `targets/` adapters with `detect` + `isAlwaysOn` only (no compile yet); `discovery/`
 - **Done when:** a debug command (`ctx-lint check --debug --list-files`) prints the discovered instruction files and their agents for a fixture repo, and the unit tests pass.
+- **Status (2026-10-17):** done. `check --list-files` (stylish + `--format json`) works, and `pnpm verify` passes (43 unit + 2 e2e tests). Notes:
+  - Source rules (`.context/rules/**/*.md`) are discovered as kind `source`, and `check.include` files as `extra`.
+  - Claude's `.claude/rules/` directory isn't detected yet (see Open Question 1).
+  - Running `check` in *this* repo picks up `test/fixtures/**`, so add `check.exclude` when dogfooding (Phase 6).
 
 ### Phase 2 — Extraction & classification
 - [ ] `extract.ts` for inline code, fenced code (per line, with prompt stripping), links
@@ -760,6 +768,8 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 7 | Single config at `.context/config.json` covering sync, check and audit | Matches the original idea; one file for users to learn | 2026-10-17 |
 | 8 | Minimum Node raised from 20 to 22.12 | Node 20 reached end-of-life in April 2026; commander 15, tsup 9 and vitest 5 all require Node ≥ 22.12 | 2026-10-17 |
 | 9 | Pin TypeScript to 6.x | TS 7 ships no compiler API; tsup 9 + rollup-plugin-dts break on it. Revisit when tsup supports TS 7 | 2026-10-17 |
+| 10 | `FileIndex` uses opaque directories + lazy, case-exact lookups instead of indexing `node_modules` etc. | Fast walks on big repos while references into heavy dirs still resolve exactly (§5.1) | 2026-10-17 |
+| 11 | Config is JSONC; `pnpm ci` renamed to `pnpm verify` | The plan's own config examples use comments; `pnpm ci` is a reserved pnpm command | 2026-10-17 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
 1. **Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files? Leaning `sections`, which is more predictable and keeps everything in one file. Check whether Claude Code's current path-scoped rule support (e.g. a `.claude/rules/` directory with path frontmatter) is stable enough to be a third mode.

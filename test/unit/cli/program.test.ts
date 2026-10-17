@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { type CliIO, run } from '../../../src/cli/program.js';
 import { ExitCode } from '../../../src/core/exit-codes.js';
@@ -44,6 +45,25 @@ describe('cli program', () => {
     const io = capture();
     expect(await run(argv('check', '--max-warnings', '-1'), io)).toBe(ExitCode.Fatal);
     expect(io.err).toContain('non-negative integer');
+  });
+
+  it('`check --list-files --format json` lists discovered files', async () => {
+    const io = capture();
+    const fixture = fileURLToPath(new URL('../../fixtures/discovery', import.meta.url));
+    const code = await run(argv('--cwd', fixture, 'check', '--list-files', '--format', 'json'), io);
+    expect(code).toBe(ExitCode.Success);
+    const output = JSON.parse(io.out) as { files: { path: string; alwaysOn: boolean }[] };
+    expect(output.files).toContainEqual(
+      expect.objectContaining({ path: 'CLAUDE.md', agents: ['claude'], alwaysOn: true }),
+    );
+  });
+
+  it('exits with Fatal when an explicit file does not exist', async () => {
+    const io = capture();
+    expect(await run(argv('check', '--list-files', 'definitely-missing.md'), io)).toBe(
+      ExitCode.Fatal,
+    );
+    expect(io.err).toContain('No such file');
   });
 
   it.each(['check', 'sync', 'audit', 'init'])(

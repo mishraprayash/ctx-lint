@@ -7,18 +7,11 @@ import { auditCommand } from './commands/audit.js';
 import { checkCommand } from './commands/check.js';
 import { initCommand } from './commands/init.js';
 import { syncCommand } from './commands/sync.js';
+import { type CliIO, processIO } from './io.js';
 
-export interface CliIO {
-  stdout: (text: string) => void;
-  stderr: (text: string) => void;
-}
+export type { CliIO } from './io.js';
 
-const defaultIO: CliIO = {
-  stdout: (text) => process.stdout.write(text),
-  stderr: (text) => process.stderr.write(text),
-};
-
-export function createProgram(io: CliIO = defaultIO): Command {
+export function createProgram(io: CliIO = processIO): Command {
   const program = new Command('ctx-lint')
     .description('Context linter & sync for AI coding agents')
     .version(VERSION, '-v, --version')
@@ -30,7 +23,7 @@ export function createProgram(io: CliIO = defaultIO): Command {
     .configureOutput({ writeOut: io.stdout, writeErr: io.stderr })
     .exitOverride();
 
-  for (const command of [checkCommand(), syncCommand(), auditCommand(), initCommand()]) {
+  for (const command of [checkCommand(io), syncCommand(), auditCommand(), initCommand()]) {
     // Subcommands inherit the output and exit behavior of the root program.
     command.configureOutput({ writeOut: io.stdout, writeErr: io.stderr }).exitOverride();
     program.addCommand(command);
@@ -40,7 +33,7 @@ export function createProgram(io: CliIO = defaultIO): Command {
 }
 
 /** Runs the CLI and returns the exit code instead of exiting, so it can be tested. */
-export async function run(argv: string[], io: CliIO = defaultIO): Promise<ExitCode> {
+export async function run(argv: string[], io: CliIO = processIO): Promise<ExitCode> {
   const program = createProgram(io);
   try {
     await program.parseAsync(argv);
@@ -50,13 +43,15 @@ export async function run(argv: string[], io: CliIO = defaultIO): Promise<ExitCo
       // --help and --version surface as CommanderErrors with exitCode 0.
       return error.exitCode === 0 ? ExitCode.Success : ExitCode.Fatal;
     }
+    const opts = program.opts<{ debug?: boolean; color?: boolean }>();
+    const c = pc.createColors(opts.color !== false && pc.isColorSupported);
     if (error instanceof CtxLintError) {
-      io.stderr(`${pc.red('error')} ${error.message}\n`);
+      io.stderr(`${c.red('error')} ${error.message}\n`);
       return error.exitCode;
     }
-    const debug = program.opts<{ debug?: boolean }>().debug === true;
+    const debug = opts.debug === true;
     io.stderr(
-      `${pc.red('ctx-lint crashed:')} ${error instanceof Error ? error.message : String(error)}\n`,
+      `${c.red('ctx-lint crashed:')} ${error instanceof Error ? error.message : String(error)}\n`,
     );
     if (debug && error instanceof Error && error.stack) {
       io.stderr(`${error.stack}\n`);

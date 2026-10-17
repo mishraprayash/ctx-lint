@@ -14,6 +14,12 @@ export class CtxLintError extends Error {
   }
 }
 
+/** Invalid or unreadable configuration. */
+export class ConfigError extends CtxLintError {}
+
+/** Bad CLI input that commander can't catch, e.g. a file argument that doesn't exist. */
+export class UsageError extends CtxLintError {}
+
 export class NotImplementedError extends CtxLintError {
   constructor(feature: string) {
     super(`\`${feature}\` is not implemented yet.`);

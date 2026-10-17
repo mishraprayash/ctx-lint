@@ -21,7 +21,7 @@ pnpm install
 | `pnpm test:e2e` | Build, then run the CLI end-to-end tests |
 | `pnpm lint` / `pnpm lint:fix` | Biome lint + format check / auto-fix |
 | `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm ci` | Everything CI runs |
+| `pnpm verify` | Everything CI runs |
 
 Try your local build with `node dist/cli.js <command>`.
 

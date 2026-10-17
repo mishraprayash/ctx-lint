@@ -1,0 +1,7 @@
+---
+description: API conventions
+globs: src/api/**/*.ts
+alwaysApply: false
+---
+
+Use zod.

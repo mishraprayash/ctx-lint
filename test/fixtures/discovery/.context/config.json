@@ -1,0 +1,4 @@
+{
+  // extra files and exclusions
+  "check": { "include": ["docs/agents/*.md"], "exclude": ["packages/legacy/**"] }
+}

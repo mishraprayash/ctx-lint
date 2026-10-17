@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "sources": {
+      "default": ".context/rules",
+      "description": "Directory of source rule files used by `ctx-lint sync`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "default": "managed-block",
+      "description": "`managed-block`: only replace content between ctx-lint markers. `file`: own the whole generated file.",
+      "type": "string",
+      "enum": [
+        "managed-block",
+        "file"
+      ]
+    },
+    "targets": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "claude": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "description": "Generate this target during `ctx-lint sync`.",
+              "type": "boolean"
+            },
+            "output": {
+              "default": "CLAUDE.md",
+              "description": "Output file, relative to the repo root.",
+              "type": "string",
+              "minLength": 1
+            },
+            "scopedRules": {
+              "default": "sections",
+              "description": "How path-scoped rules are emitted: as sections of the root file, or as nested files in the matching directories.",
+              "type": "string",
+              "enum": [
+                "sections",
+                "nested"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "agents": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "description": "Generate this target during `ctx-lint sync`.",
+              "type": "boolean"
+            },
+            "output": {
+              "default": "AGENTS.md",
+              "description": "Output file, relative to the repo root.",
+              "type": "string",
+              "minLength": 1
+            },
+            "scopedRules": {
+              "default": "sections",
+              "description": "How path-scoped rules are emitted: as sections of the root file, or as nested files in the matching directories.",
+              "type": "string",
+              "enum": [
+                "sections",
+                "nested"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "cursor": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "description": "Generate this target during `ctx-lint sync`.",
+              "type": "boolean"
+            },
+            "outputDir": {
+              "default": ".cursor/rules",
+              "description": "Directory for generated rule files, relative to the repo root.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "copilot": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "description": "Generate this target during `ctx-lint sync`.",
+              "type": "boolean"
+            },
+            "output": {
+              "default": ".github/copilot-instructions.md",
+              "description": "Output file, relative to the repo root.",
+              "type": "string",
+              "minLength": 1
+            },
+            "scopedRules": {
+              "default": "instructions",
+              "description": "How path-scoped rules are emitted: as `.github/instructions/*.instructions.md` files, or as sections of the main file.",
+              "type": "string",
+              "enum": [
+                "instructions",
+                "sections"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "windsurf": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": false,
+              "description": "Generate this target during `ctx-lint sync`.",
+              "type": "boolean"
+            },
+            "outputDir": {
+              "default": ".windsurf/rules",
+              "description": "Directory for generated rule files, relative to the repo root.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "include": {
+          "default": [],
+          "description": "Extra files to lint (globs, relative to the repo root).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude": {
+          "default": [],
+          "description": "Files to skip (globs).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rules": {
+          "default": {},
+          "description": "Rule severity overrides, e.g. { \"dependency-installed\": \"off\" }.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warn",
+              "off"
+            ]
+          }
+        },
+        "ignorePaths": {
+          "default": [
+            "dist/**",
+            "build/**",
+            "coverage/**",
+            ".env*"
+          ],
+          "description": "Referenced paths that may legitimately be missing (globs).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignorePatterns": {
+          "default": [],
+          "description": "Regular expressions for references to skip entirely.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "aliases": {
+          "default": {},
+          "description": "Import aliases used in docs, e.g. { \"@/\": \"src/\" }.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "minConfidence": {
+          "default": "medium",
+          "description": "References classified below this confidence are skipped.",
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "tokenizer": {
+          "default": "heuristic",
+          "type": "string",
+          "enum": [
+            "heuristic",
+            "o200k",
+            "cl100k"
+          ]
+        },
+        "budget": {
+          "description": "Always-on token budget, with optional per-agent overrides.",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "default": {
+              "default": 2500,
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "claude": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "agents": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "cursor": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "copilot": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "windsurf": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false
+        },
+        "fileWarn": {
+          "default": 1500,
+          "description": "Warn when a single file is larger than this many tokens.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "description": "ctx-lint configuration (.context/config.json)",
+  "title": "ctx-lint config"
+}
