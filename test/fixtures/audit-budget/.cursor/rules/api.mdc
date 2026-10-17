@@ -1,0 +1,7 @@
+---
+description: API
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+- Validate every request body at the edge of the system before using it.

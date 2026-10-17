@@ -98,4 +98,21 @@ describe('built cli', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('audit exits 1 over budget, 0 with --warn-only, and prints JSON', async () => {
+    const root = fixture('audit-budget');
+    const over = await execa('node', [cli, '--no-color', '--cwd', root, 'audit'], {
+      reject: false,
+    });
+    expect(over.exitCode).toBe(1);
+    expect(over.stdout).toContain('Over the always-on budget: claude');
+    expect(
+      (await execa('node', [cli, '--cwd', root, 'audit', '--warn-only'], { reject: false }))
+        .exitCode,
+    ).toBe(0);
+    const json = await execa('node', [cli, '--cwd', root, 'audit', '--format', 'json'], {
+      reject: false,
+    });
+    expect(JSON.parse(json.stdout)).toMatchObject({ version: 1, overBudget: ['claude'] });
+  });
 });

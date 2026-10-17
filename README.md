@@ -3,7 +3,7 @@
 > Context linter & sync for AI coding agents.
 
 > [!WARNING]
-> Early development: `check` and `sync` work; `audit` is next. See [PLAN.md](PLAN.md) for the roadmap.
+> Early development: `check`, `sync` and `audit` work; hardening and the first release are next. See [PLAN.md](PLAN.md) for the roadmap.
 
 AI coding agents each read their own instruction file (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/*.mdc`, `.github/copilot-instructions.md`, …). These files drift apart, and they rot: they point at deleted files, renamed directories, scripts that no longer exist, and packages you removed. Agents trust them anyway.
 
@@ -86,6 +86,24 @@ npx ctx-lint sync --check    # in CI: fail if generated files are stale or edite
 `<!-- ctx-lint:begin -->` / `<!-- ctx-lint:end -->` markers, so hand-written notes around them
 survive. It refuses to overwrite anything else without `--force`, and `--dry-run` shows the diff.
 See [docs/targets.md](docs/targets.md) for every format detail.
+
+## Audit: token budgets
+
+```bash
+npx ctx-lint audit
+```
+
+```
+  Agent           Always-on  Conditional   Budget  Status
+  Claude Code         3,412        1,180    3,000  ✖ over by 412
+  Cursor              1,950        2,640    2,500  ✔
+```
+
+`audit` shows what each agent loads on every request vs. only sometimes (it follows Claude's
+`@imports`, and knows Cursor and Copilot also read `AGENTS.md`). It also lists the largest
+sections and content duplicated across files, and projects the numbers after `sync`. It exits 1
+over budget. The default tokenizer needs no dependencies; its median error against o200k is 3%.
+See [docs/audit.md](docs/audit.md).
 
 ## Contributing
 

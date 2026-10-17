@@ -735,11 +735,16 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
   - `init --import` skips CLAUDE.local.md, generated files and pointer files (`@AGENTS.md`), merges identical content (CLAUDE.md = AGENTS.md), skips content already in a source rule (so re-imports are idempotent), and reminds you to delete nested originals.
 
 ### Phase 5 — `audit`
-- [ ] Heuristic tokenizer + calibration script (`scripts/calibrate-tokenizer.ts`), with the error documented
-- [ ] Optional `gpt-tokenizer` integration
-- [ ] Baseline per agent (incl. Claude `@imports`), conditional tokens, projected baseline from the IR
-- [ ] Section breakdown, duplicate detection, budget exit code
+- [x] Heuristic tokenizer + calibration script (`scripts/calibrate-tokenizer.ts`), with the error documented
+- [x] Optional `gpt-tokenizer` integration
+- [x] Baseline per agent (incl. Claude `@imports`), conditional tokens, projected baseline from the IR
+- [x] Section breakdown, duplicate detection, budget exit code
 - **Done when:** the audit fixture's numbers are within the documented tolerance of o200k, and a budget overrun exits 1.
+- **Status (2026-10-17):** done. The heuristic is calibrated on 189 markdown files (this repo plus dependency READMEs; nothing downloaded or committed). Committed weights on 191 files: median error 3.1%, p90 7.2%, max 18.5% (a symbol-table README), bias −0.3% (documented in `docs/audit.md`; `pnpm calibrate` also reports held-out error). `test/fixtures/audit-budget` is within 15% of o200k per agent and exits 1 over budget. `pnpm verify`: 481 unit + 7 e2e tests. As built:
+  - `gpt-tokenizer` is an **optional peer dependency** (lazy-loaded for `--tokenizer o200k|cl100k`), so the default install stays dependency-free for audit.
+  - Agent loading follows the vendor docs. Claude follows `@imports` up to four hops (not one, as planned) and reads AGENTS.md only without a CLAUDE.md. Cursor, Copilot and Windsurf also count the root AGENTS.md, which makes cross-format duplication visible. Frontmatter isn't counted.
+  - Agents with no files of their own are listed only when they're an enabled target in a config file. The projected table appears only when syncing would change the numbers.
+  - Duplicates are counted per agent (blocks of 20+ characters repeated across its always-on files).
 
 ### Phase 6 — Hardening & polish
 - [ ] Git rename detection for suggestions
@@ -803,6 +808,7 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 15 | Open Question 2 resolved: a script missing where it runs but defined in another package is a warning with a "run it there" hint | Usually means "wrong directory", not "deleted" | 2026-10-17 |
 | 16 | Claude scoped rules compile to `.claude/rules/*.md` with `paths` by default | Native, loaded only for matching files (verified against Claude Code docs, 2026-10-17) | 2026-10-17 |
 | 17 | Sync is all-or-nothing, and `--force` overwrites unmarked files | A partial sync leaves agents inconsistent; overwriting is explicit and previewable with `--dry-run` | 2026-10-17 |
+| 18 | `gpt-tokenizer` is an optional peer dependency; the default is a calibrated heuristic | Light install; median 3% error is plenty for budgeting, and Claude's tokenizer isn't public anyway | 2026-10-17 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
 1. ~~**Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files?~~ Resolved: neither. Claude Code supports `.claude/rules/*.md` with `paths`, which is now the default `"rules"` mode (Decision 16).

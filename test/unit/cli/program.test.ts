@@ -78,10 +78,4 @@ describe('cli program', () => {
     );
     expect(io.err).toContain('No such file');
   });
-
-  it.each(['audit'])('`%s` reports it is not implemented yet', async (cmd) => {
-    const io = capture();
-    expect(await run(argv(cmd), io)).toBe(ExitCode.Fatal);
-    expect(io.err).toContain('not implemented yet');
-  });
 });

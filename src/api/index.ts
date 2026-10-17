@@ -1,5 +1,10 @@
 // Public programmatic API. Everything the CLI can do is exported from here (PLAN.md §3.2).
 
+export type { AgentAudit, AuditFile } from '../auditor/baseline.js';
+export { estimateTokens } from '../auditor/heuristic.js';
+export type { Section } from '../auditor/sections.js';
+export type { Tokenizer, TokenizerName } from '../auditor/tokenizer.js';
+export { loadTokenizer } from '../auditor/tokenizer.js';
 export { defaultConfig, loadConfig, parseConfig } from '../config/load.js';
 export type { Config, ConfigInput } from '../config/schema.js';
 export { configSchema } from '../config/schema.js';
@@ -32,6 +37,8 @@ export type { PlannedChange, SyncAction, SyncPlan } from '../syncer/plan.js';
 export { planSync } from '../syncer/plan.js';
 export type { CompileContext, OutputFile, TargetAdapter } from '../targets/adapter.js';
 export { getTarget, TARGETS } from '../targets/registry.js';
+export type { AuditOptions, AuditResult } from './audit.js';
+export { audit } from './audit.js';
 export type { CheckOptions, CheckResult } from './check.js';
 export { check } from './check.js';
 export type { ContextOptions } from './context.js';

@@ -29,7 +29,7 @@ export function createProgram(
   for (const command of [
     checkCommand(runtime),
     syncCommand(runtime),
-    auditCommand(),
+    auditCommand(runtime),
     initCommand(runtime),
   ]) {
     // Subcommands inherit the output and exit behavior of the root program.

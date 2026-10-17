@@ -1,0 +1,3 @@
+{
+  "audit": { "budget": { "default": 2500, "claude": 50 }, "fileWarn": 60 }
+}
