@@ -26,6 +26,8 @@ export interface LintOptions {
 
 export interface FileResult {
   path: string;
+  /** The file's text as linted, for reporters that show the offending line. */
+  source: string;
   diagnostics: Diagnostic[];
   errorCount: number;
   warningCount: number;
@@ -125,7 +127,7 @@ export function lintFiles(
       );
     }
     if (options.quiet) diagnostics = diagnostics.filter((d) => d.severity === 'error');
-    return summarize(file.path, dedupe(diagnostics));
+    return summarize(file.path, file.content, dedupe(diagnostics));
   });
 
   return {
@@ -186,9 +188,10 @@ function dedupe(diagnostics: Diagnostic[]): Diagnostic[] {
     });
 }
 
-function summarize(path: string, diagnostics: Diagnostic[]): FileResult {
+function summarize(path: string, source: string, diagnostics: Diagnostic[]): FileResult {
   return {
     path,
+    source,
     diagnostics,
     errorCount: diagnostics.filter((d) => d.severity === 'error').length,
     warningCount: diagnostics.filter((d) => d.severity === 'warn').length,

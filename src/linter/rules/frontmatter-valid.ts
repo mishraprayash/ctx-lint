@@ -3,7 +3,7 @@ import type { Range } from '../../core/types.js';
 import { frontmatterSpecFor } from '../../targets/frontmatter.js';
 import type { LintRule, RuleContext } from '../rule.js';
 import { closest, orList } from '../suggest.js';
-import { pointRange } from './util.js';
+import { pointRange, sourceText } from './util.js';
 
 export const frontmatterValid: LintRule = {
   id: 'frontmatter-valid',
@@ -11,6 +11,7 @@ export const frontmatterValid: LintRule = {
     description:
       'Frontmatter is valid YAML and uses the keys and types the target format expects (Cursor, Copilot, Windsurf, source rules).',
     defaultSeverity: 'error',
+    fixable: true,
   },
   file(file, ctx) {
     const fm = file.markdown.frontmatter;
@@ -32,10 +33,17 @@ export const frontmatterValid: LintRule = {
       if (!field) {
         const hinted = spec.hints?.[key];
         const near = hinted ? [hinted] : closest(key, known);
+        const range = keyRange(ctx, key);
+        // `globs` in a Copilot file is `applyTo`: a known mix-up has exactly one right key.
+        const rename =
+          hinted !== undefined && sourceText(ctx, range) === key
+            ? { suggestion: { message: `Rename it to "${hinted}".`, replacement: hinted } }
+            : {};
         ctx.report({
           message: `Unknown frontmatter key "${key}" for ${spec.label}.${near.length > 0 ? ` Did you mean ${orList(near)}?` : ` Known keys: ${known.join(', ')}.`}`,
-          range: keyRange(ctx, key),
+          range,
           downgrade: true,
+          ...rename,
         });
       } else if (!field.schema.safeParse(value).success) {
         ctx.report({ message: `"${key}" must be ${field.expected}.`, range: keyRange(ctx, key) });

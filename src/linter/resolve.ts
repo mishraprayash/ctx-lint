@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { distance } from 'fastest-levenshtein';
 import { basenameRel, dirnameRel, joinRel, normalizeRel } from '../core/paths.js';
 import type { PathReference } from '../core/references.js';
 import type { EntryType, FileIndex } from '../fs/file-index.js';
@@ -103,8 +104,12 @@ function resolveOne(ref: PathReference, files: FileIndex, fileDir: string): Reso
     if (candidatesFor({ ...ref, value: first }, fileDir).every((p) => !files.exists(p))) {
       // `vs/code/browser/workbench/workbench.js` (build output) for `src/vs/…/workbench.ts`.
       const sources = ref.isDir ? [] : TS_SOURCES.map((map) => map(ref.value));
+      // Never satisfied by test data, which would hide a real stale path.
+      const inTestData = TEST_DATA.test(`${fileDir}/`);
       for (const suffix of new Set([ref.value, ...sources])) {
-        const match = files.withSuffix(suffix, ref.isDir ? 'dir' : undefined)[0];
+        const match = files
+          .withSuffix(suffix, ref.isDir ? 'dir' : undefined)
+          .find((p) => inTestData || !TEST_DATA.test(p));
         if (match) return { status: 'found', path: match, type: files.get(match) ?? 'file' };
       }
     }
@@ -165,19 +170,64 @@ export function suggestPath(
     }
   }
 
+  // A suggestion must be a real path *and* a plausible one: never test data (unless the
+  // instruction file lives there too), and never an unrelated file that shares a common name.
+  const inTestData = TEST_DATA.test(`${fileDir}/`);
+  const usable = (p: string) => !files.isIgnored(p) && (inTestData || !TEST_DATA.test(p));
+
   const base = basenameRel(ref.value);
   const wantDir = ref.isDir;
   const moved = files
     .byBasename(base)
     .filter((p) => (wantDir ? files.isDirectory(p) : true))
-    .filter((p) => !files.isIgnored(p));
-  if (moved.length > 0) return { paths: moved.slice(0, 3), fixable: moved.length === 1 };
+    .filter(usable);
+  // Auto-fixable only with evidence beyond the name: a shared directory (`apps/web/src/x.ts` →
+  // `packages/ui/src/x.ts`). `rules/backend/api.md` → `docs/api.md` is shown, not applied.
+  if (moved.length === 1) {
+    const only = moved[0] as string;
+    return { paths: moved, fixable: sharedParents(ref.value, only) > 0 };
+  }
+  if (moved.length > 1) {
+    // `src/client.ts` → `packages/cli/src/client.ts` (shares `src/`), not any other `client.ts`.
+    const related = moved
+      .map((p) => ({ p, shared: sharedParents(ref.value, p) }))
+      .filter((c) => c.shared > 0)
+      .sort((a, b) => b.shared - a.shared);
+    const best = related.filter((c) => c.shared === related[0]?.shared).map((c) => c.p);
+    // Several files have this name: even the best match is a choice, so it's never applied.
+    return { paths: best.slice(0, 3), fixable: false };
+  }
 
   for (const candidate of candidatesFor(ref, fileDir)) {
-    const renamed = nearMiss(candidate, files);
+    const renamed = nearMiss(candidate, files).filter(usable);
     if (renamed.length > 0) return { paths: renamed, fixable: false };
   }
   return { paths: [], fixable: false };
+}
+
+/** Test data, examples and vendored code: not where a real instruction's file went. */
+const TEST_DATA =
+  /(?:^|\/)(?:fixtures|__fixtures__|testdata|test-data|examples?|vendor|third_party)\//;
+
+/** How many directories just above the file name two paths have in common. */
+function sharedParents(a: string, b: string): number {
+  const left = a.split('/').slice(0, -1).reverse();
+  const right = b.split('/').slice(0, -1).reverse();
+  let n = 0;
+  while (n < left.length && left[n] === right[n]) n++;
+  return n;
+}
+
+/** A file name without its extension. */
+function stemOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
+/** Lowercase extension of a file name (`.ts`), `''` for none. */
+function extensionOf(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot).toLowerCase() : '';
 }
 
 /** Fixes the first missing segment by edit distance, then checks the rest still exists. */
@@ -191,7 +241,18 @@ function nearMiss(target: string, files: FileIndex): string[] {
       continue;
     }
     const rest = segments.slice(i + 1).join('/');
-    return closest(segments[i] as string, files.children(existing))
+    // `latest/` is not a typo of `pytest.ini`: a near miss keeps the extension, or (for
+    // `guards/` → `guard.ts`) is at most one letter from the name without it.
+    // Short names need a closer match: `latest` is two edits from `test`, but no typo of it.
+    const segment = segments[i] as string;
+    const ext = extensionOf(segment);
+    const stem = stemOf(segment).toLowerCase();
+    const allowed = Math.max(1, Math.floor(stem.length / 4));
+    return closest(segment, files.children(existing))
+      .filter((sibling) => {
+        const d = distance(stem, stemOf(sibling).toLowerCase());
+        return extensionOf(sibling) === ext ? d <= allowed : d <= 1;
+      })
       .map((sibling) => joinRel(existing, sibling, rest))
       .filter((p) => files.exists(p));
   }

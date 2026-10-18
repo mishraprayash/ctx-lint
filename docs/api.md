@@ -32,7 +32,7 @@ context to several commands.
 
 | Function | Returns | Same as |
 |---|---|---|
-| `check(ctx, { files?, cwd?, fix?, rules?, quiet?, deps? })` | `CheckResult`: `files`, `errorCount`, `warningCount`, `fixableCount`, `fixed` | `ctx-lint check` |
+| `check(ctx, { files?, cwd?, fix?, rules?, quiet?, deps? })` | `CheckResult`: `files` (each with `path`, `source`, `diagnostics`), `errorCount`, `warningCount`, `fixableCount`, `fixed`, `reverted` | `ctx-lint check` |
 | `sync(ctx, { dryRun?, targets?, force? })` | `SyncResult`: `plan` (changes, conflicts, problems), `written`, `outOfDate` | `ctx-lint sync` (`dryRun` is also what `--check` uses) |
 | `audit(ctx, { budget?, tokenizer? })` | `AuditResult`: `agents` (always-on, conditional, budget, duplicates), `projected`, `sections`, `largeFiles`, `overBudget` | `ctx-lint audit` |
 | `init(ctx, { import?, split? })` | `InitResult`: `created`, `configExisted`, `enabledTargets`, `imported` | `ctx-lint init` |
@@ -41,7 +41,8 @@ The option types (`CheckOptions`, `SyncOptions`, `AuditOptions`, `InitOptions`) 
 
 Each diagnostic has `ruleId`, `severity` (`'error'` or `'warn'`), `message`, `range` (1-based
 `line` / `column` and a 0-based `offset` for `start` and `end`), and an optional `suggestion`
-(`{ message, replacement? }`).
+(`{ message, replacement?, candidates? }`: `replacement` when `--fix` can apply it, `candidates`
+for the real paths it could be).
 
 ## Formatting results
 
@@ -55,7 +56,7 @@ process.stdout.write(REPORTERS.sarif(result, { root: ctx.root, colors, version: 
 
 A `Reporter` is a pure function `(result, { root, colors, version }) => string`.
 
-`REPORTERS` holds `stylish`, `compact`, `json`, `github` and `sarif`. The JSON format's version is
+`REPORTERS` holds `stylish`, `compact`, `json`, `github`, `sarif` and `agent`. The JSON format's version is
 exported as `JSON_FORMAT_VERSION`.
 
 ## Lower-level building blocks

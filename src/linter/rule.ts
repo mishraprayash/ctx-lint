@@ -14,7 +14,7 @@ export interface RuleMeta {
 export interface ReportDescriptor {
   message: string;
   range: Range;
-  suggestion?: { message: string; replacement?: string };
+  suggestion?: { message: string; replacement?: string; candidates?: string[] };
   /** Report as a warning even if the rule is configured as an error (never upgrades). */
   downgrade?: boolean;
 }

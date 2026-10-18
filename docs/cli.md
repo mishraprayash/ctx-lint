@@ -22,8 +22,8 @@ See [check.md](check.md).
 
 | Option | |
 |---|---|
-| `--format <format>` | `stylish` (default), `compact`, `json`, `github`, `sarif` |
-| `--fix` | Apply unambiguous fixes, then report what's left |
+| `--format <format>` | `stylish` (default), `compact`, `json`, `github`, `sarif`, `agent` (a task for your coding agent) |
+| `--fix` | Apply the one-answer fixes, re-check them (undoing any that didn't work), then report what's left |
 | `--max-warnings <n>` | Exit 1 when there are more than `n` warnings |
 | `--quiet` | Report errors only |
 | `--rule <id=severity>` | Override a rule: `error`, `warn` or `off` (repeatable) |

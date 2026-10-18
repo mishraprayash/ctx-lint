@@ -43,5 +43,9 @@ export interface Diagnostic {
   /** Repo-relative path. */
   file: string;
   range: Range;
-  suggestion?: { message: string; replacement?: string };
+  /**
+   * How to fix it. `replacement` (for the diagnostic's range) is set when `--fix` can apply it;
+   * `candidates` lists the real paths or names it could be, when there are any.
+   */
+  suggestion?: { message: string; replacement?: string; candidates?: string[] };
 }

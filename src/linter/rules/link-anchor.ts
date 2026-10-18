@@ -4,6 +4,7 @@ import { parseMarkdown, walk } from '../../parsers/markdown.js';
 import { resolvePath } from '../resolve.js';
 import type { LintRule, RuleContext } from '../rule.js';
 import { closest, orList } from '../suggest.js';
+import { sourceText } from './util.js';
 
 const MARKDOWN = /\.(?:md|mdx|mdc|markdown)$/i;
 
@@ -12,6 +13,7 @@ export const linkAnchor: LintRule = {
   meta: {
     description: 'Links to a `#heading` in another markdown file point at a heading that exists.',
     defaultSeverity: 'warn',
+    fixable: true,
   },
   reference(ref, ctx) {
     if (ref.kind !== 'path' || ref.anchor === undefined) return;
@@ -25,9 +27,26 @@ export const linkAnchor: LintRule = {
     if (anchors.has(wanted)) return;
 
     const near = closest(wanted, anchors);
+    const question = `Did you mean ${orList(near.map((a) => `#${a}`))}?`;
+    // One close heading: rewrite the anchor, keeping the rest of the link as written.
+    const written = sourceText(ctx, ref.range);
+    const only = near.length === 1 ? near[0] : undefined;
+    const replacement =
+      only !== undefined && written.endsWith(`#${ref.anchor}`)
+        ? `${written.slice(0, written.length - ref.anchor.length)}${only}`
+        : undefined;
     ctx.report({
-      message: `Heading "#${ref.anchor}" not found in ${resolution.path}.${near.length > 0 ? ` Did you mean ${orList(near.map((a) => `#${a}`))}?` : ''}`,
+      message: `Heading "#${ref.anchor}" not found in ${resolution.path}.${near.length > 0 ? ` ${question}` : ''}`,
       range: ref.range,
+      ...(near.length > 0
+        ? {
+            suggestion: {
+              message: question,
+              candidates: near.map((a) => `${resolution.path}#${a}`),
+              ...(replacement ? { replacement } : {}),
+            },
+          }
+        : {}),
     });
   },
 };

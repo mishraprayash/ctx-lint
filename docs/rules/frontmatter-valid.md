@@ -19,3 +19,7 @@ A common mistake: an unquoted glob that starts with `*` (`globs: *.ts`) is a YAM
 
 For source rules, `alwaysApply: false` without `globs` or a `description` is an error: no agent
 would ever load that rule.
+
+**Fix:** a key from another format that has exactly one equivalent (`globs` in a Copilot file is
+`applyTo`, `globs` in a Claude rule is `paths`) is renamed by `--fix`. If the value doesn't suit
+the new key, re-checking catches it and the fix is undone.

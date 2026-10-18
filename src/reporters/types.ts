@@ -11,5 +11,5 @@ export interface ReportContext {
 /** Turns a lint result into text for stdout. Pure: no I/O. */
 export type Reporter = (result: LintResult, ctx: ReportContext) => string;
 
-export const FORMATS = ['stylish', 'json', 'compact', 'github', 'sarif'] as const;
+export const FORMATS = ['stylish', 'json', 'compact', 'github', 'sarif', 'agent'] as const;
 export type Format = (typeof FORMATS)[number];

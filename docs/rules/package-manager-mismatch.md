@@ -9,3 +9,7 @@ Commands should use the repo's package manager. It's detected from `packageManag
 ```md
 - Run tests with `npm test`.   <!-- ⚠ in a pnpm repo: agents will mix package managers -->
 ```
+
+**Fix:** a plain `<tool> [run] <script>` command (`npm run test:e2e`, `npm test`) is rewritten by
+`--fix` to the repo's package manager (`pnpm run test:e2e`). Commands with flags in between are
+left for you.

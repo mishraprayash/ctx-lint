@@ -31,20 +31,36 @@ ctx-lint check
 ```
 
 ```
-CLAUDE.md
-   7:24  error    Path "src/auth/guards/" does not exist. Did you mean "src/auth/guard.ts"?        path-exists
-   9:16  error    Path "./scripts/deploy.sh" does not exist.                                       path-exists
-  13:42  warning  This repo uses pnpm (pnpm-lock.yaml), but this command uses npm.                 package-manager-mismatch
-  13:42  error    Script "test:e2e" is not defined in package.json. Available: build, lint, test.  script-exists
-  15:40  error    Make target "migrate" not found in Makefile. Available: build, clean.            make-target-exists
-   24:8  warning  "zod" is referenced as a library but isn't in any package.json.                  dependency-installed
+CLAUDE.md:7:24  error  path-exists
+  Path "src/auth/guards/" does not exist.
+    7 │ - Auth guards live in `src/auth/guards/`.
+      │                        ^^^^^^^^^^^^^^^^
+  → Did you mean "src/auth/guard.ts"?
+
+CLAUDE.md:13:34  warning  package-manager-mismatch
+  This repo uses pnpm (pnpm-lock.yaml), but this command uses npm.
+   13 │ - Run the end-to-end tests with `npm run test:e2e`.
+      │                                  ^^^^^^^^^^^^^^^^
+  → Use `pnpm run test:e2e`.  (fixable)
+
+CLAUDE.md:15:40  error  make-target-exists
+  Make target "migrate" not found in Makefile. Available: build, clean.
+   15 │ - Apply database migrations with `make migrate`.
+      │                                        ^^^^^^^
+
+✖ 7 problems (4 errors, 3 warnings) in 2 files
+  1 problem can be fixed safely: ctx-lint check --fix
+  For the rest, hand a task to your coding agent: ctx-lint check --fix --format agent
 ```
 
-That's the [demo project](examples/demo): `ctx-lint --cwd examples/demo check`.
+That's part of the [demo project](examples/demo)'s report: `ctx-lint --cwd examples/demo check`.
 
-- **Fixes:** missing paths come with the likeliest fix. That's the rename from your git history
-  ("It was renamed to … in a1b2c3d"), the same file elsewhere, or a near-miss name. `--fix`
-  applies the unambiguous ones.
+- **Fixes you can trust:** suggestions are always real paths (the rename from your git history,
+  the same file elsewhere, or a near-miss name). `--fix` applies only the ones with a single right
+  answer, then re-checks them and undoes any that didn't work.
+- **The rest goes to your agent:** `ctx-lint check --fix --format agent` writes a task for your
+  coding agent. It lists each remaining problem with its line and the real candidates, and
+  forbids invented paths. The agent is done when `ctx-lint check` passes.
 - **Built for CI:** output as `stylish`, `compact`, `json`, `github` (PR annotations) or `sarif`.
 - **Few false positives:** only references it's sure about can be errors. Anything less certain
   is a warning or skipped. On ten large public repos, about 1 in 10 errors was a false positive;

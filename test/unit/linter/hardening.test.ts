@@ -105,6 +105,69 @@ describe('git rename detection', () => {
   });
 });
 
+describe('path suggestions are real and plausible', () => {
+  it('skips test data and unrelated files, and prefers a shared directory', async () => {
+    const root = await repo({
+      'test/fixtures/demo/.github/copilot-instructions.md': '',
+      'src/index.ts': '',
+      'packages/cli/src/client.ts': '',
+      'packages/web/lib/client.ts': '',
+      'apps/a/roles/constants.ts': '',
+      'apps/b/events/constants.ts': '',
+      'pytest.ini': '',
+      'docs/api.md': '',
+      'CLAUDE.md': [
+        '- `.github/copilot-instructions.md`',
+        '- `src/client.ts`',
+        '- `lib/workflows/constants.ts`',
+        '- `latest/` holds the newest build.',
+        '- `rules/backend/api.md`',
+      ].join('\n'),
+    });
+    expect(await messages(root)).toEqual([
+      'CLAUDE.md:1 path-exists: Path ".github/copilot-instructions.md" does not exist.',
+      'CLAUDE.md:2 path-exists: Path "src/client.ts" does not exist. Did you mean "packages/cli/src/client.ts"?',
+      'CLAUDE.md:3 path-exists: Path "lib/workflows/constants.ts" does not exist.',
+      'CLAUDE.md:4 path-exists: Path "latest/" does not exist.',
+      'CLAUDE.md:5 path-exists: Path "rules/backend/api.md" does not exist. Did you mean "docs/api.md"?',
+    ]);
+    // The only `api.md` shares no directory with the written path: suggested, never applied.
+    const fixed = await check(await createContext({ root }), { fix: true });
+    expect(fixed.fixed.problems).toBe(0);
+  });
+});
+
+describe('one-answer fixes', () => {
+  it('fixes a near-miss anchor, a mixed-up frontmatter key and the package manager', async () => {
+    const root = await repo({
+      'package.json':
+        '{ "packageManager": "pnpm@9.0.0", "scripts": { "lint": "x", "build": "x" } }',
+      'docs/guide.md': '# Guide\n\n## Installation\n',
+      'src/a.ts': '',
+      '.github/instructions/ts.instructions.md': '---\nglobs: "src/**"\n---\nUse types.\n',
+      'CLAUDE.md': [
+        '- See [install](docs/guide.md#instalation).',
+        '- Lint with `npm run lint`.',
+        '- Build with `npm --prefix web run build`.',
+      ].join('\n'),
+    });
+    const result = await check(await createContext({ root }), { fix: true });
+    expect(result.fixed).toEqual({ files: 2, problems: 3 });
+    expect(result.reverted).toEqual({ files: 0, problems: 0 });
+    const { readFile } = await import('node:fs/promises');
+    expect(await readFile(path.join(root, 'CLAUDE.md'), 'utf8')).toBe(
+      [
+        '- See [install](docs/guide.md#installation).',
+        '- Lint with `pnpm run lint`.',
+        '- Build with `npm --prefix web run build`.', // Flags: not a plain command, left alone.
+      ].join('\n'),
+    );
+    expect(await readFile(path.join(root, '.github/instructions/ts.instructions.md'), 'utf8')).toBe(
+      '---\napplyTo: "src/**"\n---\nUse types.\n',
+    );
+  });
+});
+
 describe('commands run from the root', () => {
   it('follows a "from the root" comment above a command in a nested file', async () => {
     const root = await repo({

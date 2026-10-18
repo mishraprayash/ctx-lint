@@ -63,19 +63,71 @@ frontmatter. Plain prose without backticks is never treated as a reference.
 - `cd packages/web && pnpm build` checks `build` in `packages/web`. So does a command below a
   `# from the repo root` comment in a code block, which runs at the root.
 
-### Suggestions and `--fix`
+## Fixing problems
 
-Every missing path comes with the likeliest fix, in this order:
+There are three steps: `check` finds the problems, `--fix` fixes the ones with exactly one right
+answer, and `--format agent` hands the rest to your coding agent.
+
+### Suggestions are real paths
+
+Every missing path comes with the likeliest fix, and every suggestion is a path that exists:
 
 1. **Git history:** "It was renamed to `src/security/guard.ts` in a1b2c3d." `ctx-lint` reads
    renames from the last 1,000 commits of your local `git log`. It doesn't fetch, and it does
    nothing outside a git repository.
-2. **The same file name elsewhere:** "Did you mean `packages/ui/src/Header.tsx`?" (it moved).
+2. **The same file elsewhere:** "Did you mean `packages/ui/src/Header.tsx`?" (it moved). For
+   common names (`client.ts`, `index.ts`), only files in a matching directory are suggested.
 3. **A near-miss name** in the directory where it should be (it was renamed or misspelled).
 
-`ctx-lint check --fix` applies a suggestion only when it's unambiguous: a recorded rename, a
-single moved file, or a case difference. It keeps your style (`./`, trailing `/`) and never edits
-generated content. Everything else is left for you to decide.
+Test fixtures, examples and vendored code are never suggested, unless the instruction file is
+there too. When nothing is plausible, there's no suggestion at all, rather than a guess.
+
+### `--fix`
+
+```bash
+ctx-lint check --fix
+```
+
+`--fix` only applies fixes with exactly one right answer:
+
+| Problem | Fix |
+|---|---|
+| A file that moved: renamed in git history, or the only file with that name and in a matching directory | The new path, in your style (`./`, trailing `/`) |
+| A path with the wrong case | The path as it is on disk |
+| A file written as a directory (`src/a.ts/`) | Without the trailing slash |
+| A link to a misspelled heading, with one close match | The right anchor |
+| `npm run x` in a pnpm repo (the plain `<tool> [run] <script>` form) | `pnpm run x` |
+| A mixed-up frontmatter key (`globs` in a Copilot file) | The key that format uses (`applyTo`) |
+
+**Every fix is verified.** After applying the fixes, `ctx-lint` checks the files again. If a
+fixed problem is still there, or the edit caused a new one, that file is put back as it was, and
+the output says so. A fix that's kept is one that made the file better. Generated content is
+never edited (fix its source rule instead), and `stylish` output marks fixable problems with
+`(fixable)`.
+
+### `--format agent`: the rest
+
+Some problems need a decision: which of three files was meant, or whether a sentence about a
+deleted folder should be rewritten or removed. Your coding agent is good at that, so give it the
+task:
+
+```bash
+ctx-lint check --fix --format agent > ctx-lint-task.md
+```
+
+Then ask your agent (Claude Code, Cursor, Copilot…) to do what `ctx-lint-task.md` says, or paste
+it in. The task lists each problem left after `--fix`, with the file, the line, and the real
+candidates. Its rules for the agent:
+
+- Edit only the instruction files. Don't change code, and don't create files to make a reference
+  valid.
+- Never invent a path: use a listed candidate, or one confirmed to exist.
+- If nothing fits, rewrite or remove the sentence. If the reference is right as written
+  (outside the repo, created at run time), add a disable comment with the reason.
+- The work is done when `ctx-lint check` no longer reports the problems.
+
+`ctx-lint` itself stays offline and deterministic. The agent does the rewriting, and `ctx-lint`
+verifies the result.
 
 ## Confidence
 
@@ -143,9 +195,11 @@ fixed becomes a test case.
 | `json` | Scripts: a stable, versioned shape (below) |
 | `github` | GitHub Actions: inline PR annotations |
 | `sarif` | Code scanning (SARIF 2.1.0), e.g. GitHub's Security tab |
+| `agent` | A coding agent: the problems `--fix` can't resolve, as a task ([above](#--format-agent-the-rest)) |
 
 The JSON shape is public API: fields are only added, and a breaking change bumps `version`.
-`suggestion.replacement` is present when `--fix` can apply the suggestion.
+`suggestion.replacement` is present when `--fix` can apply the suggestion, and
+`suggestion.candidates` lists the real paths it could be.
 
 ```json
 {
@@ -169,7 +223,10 @@ The JSON shape is public API: fields are only added, and a breaking change bumps
           "column": 24,
           "endLine": 7,
           "endColumn": 40,
-          "suggestion": { "message": "Did you mean \"src/auth/guard.ts\"?" }
+          "suggestion": {
+            "message": "Did you mean \"src/auth/guard.ts\"?",
+            "candidates": ["src/auth/guard.ts"]
+          }
         }
       ]
     }
@@ -181,8 +238,8 @@ The JSON shape is public API: fields are only added, and a breaking change bumps
 
 | Option | |
 |---|---|
-| `--format <format>` | `stylish`, `compact`, `json`, `github`, `sarif` |
-| `--fix` | Apply unambiguous fixes, then report what's left |
+| `--format <format>` | `stylish`, `compact`, `json`, `github`, `sarif`, `agent` |
+| `--fix` | Apply the one-answer fixes, re-check them (undoing any that didn't work), then report what's left |
 | `--max-warnings <n>` | Exit 1 when there are more than `n` warnings |
 | `--quiet` | Report errors only |
 | `--rule <id=severity>` | Override a rule for this run: `error`, `warn` or `off` (repeatable) |

@@ -3,7 +3,7 @@ import type { ProjectContext } from '../core/context.js';
 import { relativeTo, toAbsolute } from '../core/paths.js';
 import { discover, type LoadedFile } from '../discovery/index.js';
 import { type LintOptions, type LintResult, lintFiles } from '../linter/engine.js';
-import { writeFixes } from '../linter/fix.js';
+import { fixesHeld, revertFixes, writeFixes } from '../linter/fix.js';
 
 export interface CheckOptions extends LintOptions {
   /** Explicit files instead of discovery (absolute, or relative to `cwd`). */
@@ -14,8 +14,10 @@ export interface CheckOptions extends LintOptions {
 }
 
 export interface CheckResult extends LintResult {
-  /** What `fix` changed (zeros when not fixing). */
+  /** What `fix` changed and kept (zeros when not fixing). */
   fixed: { files: number; problems: number };
+  /** Fixes that were undone because re-checking showed they didn't work (zeros when not fixing). */
+  reverted: { files: number; problems: number };
 }
 
 /** Lints the project's instruction files: the programmatic `ctx-lint check`. */
@@ -26,13 +28,33 @@ export async function check(ctx: ProjectContext, options: CheckOptions = {}): Pr
   };
   const files = withoutSymlinks(ctx, await discover(ctx, discoverOptions));
   const result = lintFiles(ctx, files, options);
-  if (!options.fix) return { ...result, fixed: { files: 0, problems: 0 } };
+  const none = { files: 0, problems: 0 };
+  if (!options.fix) return { ...result, fixed: none, reverted: none };
 
-  const fixed = await writeFixes(files, result);
-  if (fixed.problems === 0) return { ...result, fixed };
-  // Re-read the fixed files and report what's left.
-  const again = withoutSymlinks(ctx, await discover(ctx, discoverOptions));
-  return { ...lintFiles(ctx, again, options), fixed };
+  const written = await writeFixes(files, result);
+  if (written.length === 0) return { ...result, fixed: none, reverted: none };
+
+  // Every fix is verified: lint again, and undo the files where a fixed problem is still there
+  // or a new one appeared. What's kept is guaranteed to have made the file better.
+  const relint = async () =>
+    lintFiles(ctx, withoutSymlinks(ctx, await discover(ctx, discoverOptions)), options);
+  let after = await relint();
+  const diagnosticsOf = (r: LintResult, path: string) =>
+    r.files.find((f) => f.path === path)?.diagnostics ?? [];
+  const failed = written.filter(
+    ({ file, fixes }) =>
+      !fixesHeld(diagnosticsOf(result, file.path), fixes, diagnosticsOf(after, file.path)),
+  );
+  if (failed.length > 0) {
+    await revertFixes(failed);
+    after = await relint();
+  }
+  const kept = written.filter((w) => !failed.includes(w));
+  const tally = (list: typeof written) => ({
+    files: list.length,
+    problems: list.reduce((n, w) => n + w.fixes.length, 0),
+  });
+  return { ...after, fixed: tally(kept), reverted: tally(failed) };
 }
 
 /**

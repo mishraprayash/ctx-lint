@@ -32,24 +32,47 @@ ctx-lint check
 agent instruction file, and checks what they reference against the repo:
 
 ```
-CLAUDE.md
-   7:24  error    Path "src/auth/guards/" does not exist. Did you mean "src/auth/guard.ts"?        path-exists
-  13:42  error    Script "test:e2e" is not defined in package.json. Available: build, lint, test.  script-exists
-  15:40  error    Make target "migrate" not found in Makefile. Available: build, clean.            make-target-exists
-   24:8  warning  "zod" is referenced as a library but isn't in any package.json.                  dependency-installed
+CLAUDE.md:7:24  error  path-exists
+  Path "src/auth/guards/" does not exist.
+    7 │ - Auth guards live in `src/auth/guards/`.
+      │                        ^^^^^^^^^^^^^^^^
+  → Did you mean "src/auth/guard.ts"?
 
-✖ 4 problems (3 errors, 1 warning)
+CLAUDE.md:13:34  warning  package-manager-mismatch
+  This repo uses pnpm (pnpm-lock.yaml), but this command uses npm.
+   13 │ - Run the end-to-end tests with `npm run test:e2e`.
+      │                                  ^^^^^^^^^^^^^^^^
+  → Use `pnpm run test:e2e`.  (fixable)
+
+CLAUDE.md:15:40  error  make-target-exists
+  Make target "migrate" not found in Makefile. Available: build, clean.
+   15 │ - Apply database migrations with `make migrate`.
+      │                                        ^^^^^^^
+
+✖ 7 problems (4 errors, 3 warnings) in 2 files
+  1 problem can be fixed safely: ctx-lint check --fix
+  For the rest, hand a task to your coding agent: ctx-lint check --fix --format agent
 ```
 
-Each line shows where the reference is, what's wrong, the likeliest fix and the rule that
-reported it. Run `ctx-lint explain <rule>` to read what a rule checks.
+Each problem shows where it is (click `CLAUDE.md:7:24` in most terminals to open it), the line,
+what's wrong, and the fix when there is one. Run `ctx-lint explain <rule>` to read what a rule
+checks.
 
-Fix what's safe to fix automatically (files that moved or changed case, when there's exactly one
-candidate):
+Fix what has a single right answer (moved files, case, the package manager, anchors). Each fix is
+re-checked, and undone if it didn't work:
 
 ```bash
 ctx-lint check --fix
 ```
+
+Hand what's left to your coding agent as a task file, and ask it to follow it:
+
+```bash
+ctx-lint check --fix --format agent > ctx-lint-task.md
+```
+
+The task lists each problem with its line and the real candidates, and tells the agent never to
+invent a path. It's done when `ctx-lint check` passes. See [Fixing problems](check.md#fixing-problems).
 
 If a report is wrong, see [Handling false positives](check.md#handling-false-positives).
 

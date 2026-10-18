@@ -1,3 +1,4 @@
+import { agent } from './agent.js';
 import { compact } from './compact.js';
 import { github } from './github.js';
 import { json } from './json.js';
@@ -15,4 +16,5 @@ export const REPORTERS: Readonly<Record<Format, Reporter>> = {
   compact,
   github,
   sarif,
+  agent,
 };

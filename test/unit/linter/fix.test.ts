@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { check } from '../../../src/api/check.js';
 import { createContext } from '../../../src/api/context.js';
 import type { Diagnostic } from '../../../src/core/types.js';
-import { applyFixesToText } from '../../../src/linter/fix.js';
+import { applyFixesToText, fixesHeld } from '../../../src/linter/fix.js';
 import { fixturePath } from './helpers.js';
 
 const at = (start: number, end: number, replacement?: string): Diagnostic => ({
@@ -33,6 +33,25 @@ describe('applyFixesToText', () => {
   });
 });
 
+describe('fixesHeld', () => {
+  const d = (ruleId: string, message: string): Diagnostic => ({ ...at(0, 1), ruleId, message });
+  const moved = d('path-exists', 'Path "a.ts" does not exist.');
+  const other = d('script-exists', 'Script "x" is not defined.');
+
+  it('accepts a fix when its problem is gone and nothing new appeared', () => {
+    expect(fixesHeld([moved, other], [moved], [other])).toBe(true);
+  });
+
+  it('rejects a fix whose problem is still there', () => {
+    expect(fixesHeld([moved], [moved], [moved])).toBe(false);
+  });
+
+  it('rejects a fix that introduced a new problem', () => {
+    const broke = d('path-exists', 'Path "b.ts" does not exist.');
+    expect(fixesHeld([moved], [moved], [broke])).toBe(false);
+  });
+});
+
 describe('check --fix', () => {
   let dir: string | undefined;
   afterEach(async () => {
@@ -45,10 +64,12 @@ describe('check --fix', () => {
     const ctx = await createContext({ root: dir });
     const result = await check(ctx, { fix: true });
 
-    expect(result.fixed).toEqual({ files: 2, problems: 3 });
+    expect(result.fixed).toEqual({ files: 2, problems: 4 });
+    expect(result.reverted).toEqual({ files: 0, problems: 0 });
     const root = await readFile(path.join(dir, 'CLAUDE.md'), 'utf8');
     expect(root).toContain('The header is `packages/ui/src/Header.tsx`.');
     expect(root).toContain('The guide is `docs/guide.md`.');
+    expect(root).toContain('- Lint with `pnpm run lint`.');
     const web = await readFile(path.join(dir, 'apps/web/CLAUDE.md'), 'utf8');
     expect(web).toContain('The entry is `./src/App.tsx`.');
     expect(result.fixableCount).toBe(0);

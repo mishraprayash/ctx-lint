@@ -54,6 +54,7 @@ export const pathExists: LintRule = {
         ? {
             suggestion: {
               message: question,
+              candidates: suggestion.paths,
               ...(replacement !== null ? { replacement } : {}),
             },
           }

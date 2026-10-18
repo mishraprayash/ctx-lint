@@ -90,7 +90,13 @@ export function checkCommand(runtime: CommandRuntime): Command {
       if (result.fixed.problems > 0) {
         const { problems, files } = result.fixed;
         runtime.stderr(
-          `${logger.colors.green('✔')} Fixed ${problems} problem${problems === 1 ? '' : 's'} in ${files} file${files === 1 ? '' : 's'}.\n`,
+          `${logger.colors.green('✔')} Fixed ${problems} problem${problems === 1 ? '' : 's'} in ${files} file${files === 1 ? '' : 's'} (each fix re-checked).\n`,
+        );
+      }
+      if (result.reverted.problems > 0) {
+        const { files } = result.reverted;
+        runtime.stderr(
+          `${logger.colors.yellow('!')} Undid the fixes in ${files} file${files === 1 ? '' : 's'}: re-checking showed they didn't resolve the problem.\n`,
         );
       }
 

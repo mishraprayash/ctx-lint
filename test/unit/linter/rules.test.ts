@@ -13,7 +13,7 @@ describe('check: monorepo fixture (every rule)', () => {
       'CLAUDE.md:6:33 warn script-exists', // --filter web storybook (bare: could be a bin)
       'CLAUDE.md:7:41 warn script-exists', // --filter mobile: no workspace
       'CLAUDE.md:9:43 error script-exists', // test:units
-      'CLAUDE.md:10:22 warn package-manager-mismatch', // npm in a pnpm repo
+      'CLAUDE.md:10:14 warn package-manager-mismatch', // npm in a pnpm repo (fixable)
       'CLAUDE.md:15:56 error make-target-exists', // make docs
       'CLAUDE.md:16:51 error make-target-exists', // just publish
       'CLAUDE.md:20:91 warn link-anchor', // #install
@@ -41,7 +41,7 @@ describe('check: monorepo fixture (every rule)', () => {
       'Unknown frontmatter key "glob" for Cursor rules. Did you mean "globs"?',
     );
     expect(messages.some((m) => m.includes('`pnpm -w build`'))).toBe(true);
-    expect(result.fixableCount).toBe(3); // Header.tsx move + two case fixes
+    expect(result.fixableCount).toBe(4); // Header.tsx move, two case fixes, npm → pnpm
   });
 });
 
@@ -83,7 +83,7 @@ describe('check: demo and false positives', () => {
       '.context/rules/api.md:3:8 warn glob-matches',
       'CLAUDE.md:7:24 error path-exists',
       'CLAUDE.md:9:16 error path-exists',
-      'CLAUDE.md:13:42 warn package-manager-mismatch',
+      'CLAUDE.md:13:34 warn package-manager-mismatch',
       'CLAUDE.md:13:42 error script-exists',
       'CLAUDE.md:15:40 error make-target-exists',
       'CLAUDE.md:24:8 warn dependency-installed',
