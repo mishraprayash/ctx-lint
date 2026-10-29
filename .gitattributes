@@ -1,0 +1,3 @@
+# LF everywhere, including Windows checkouts: tests compare file text exactly, and generated
+# files and snapshots are LF. (ctx-lint itself reads CRLF files fine.)
+* text=auto eol=lf

@@ -31,7 +31,7 @@
   "author": "Prayash Mishra",
   "type": "module",
   "bin": {
-    "ctx-lint": "./dist/cli.js"
+    "ctx-lint": "dist/cli.js"
   },
   "exports": {
     ".": {

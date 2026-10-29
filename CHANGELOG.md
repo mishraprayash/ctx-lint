@@ -4,7 +4,7 @@ All notable changes to `ctx-lint`. The format follows [Keep a Changelog](https:/
 and versions follow [Semantic Versioning](https://semver.org). Before 1.0, minor versions may
 change behavior; the JSON report format only changes additively.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-29)
 
 The first release.
 
