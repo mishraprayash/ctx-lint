@@ -16,6 +16,51 @@ reported as warnings at most ([confidence](check.md#confidence)), CI fails only 
 
 ## GitHub Actions
 
+The shortest setup uses the `ctx-lint` action:
+
+```yaml
+name: Agent instructions
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ctx-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # full history, so suggestions can say "renamed to X in a1b2c3d"
+      - uses: mishraprayash/ctx-lint@v0
+```
+
+It sets up Node.js 22 and runs `ctx-lint check --format github`, which annotates the pull
+request. Its inputs:
+
+| Input | Default | |
+|---|---|---|
+| `args` | `check --format github` | What to run, e.g. `sync --check` or `audit` |
+| `version` | `latest` | The ctx-lint version from npm. Pin it (`0.1.0`) for reproducible runs |
+| `working-directory` | `.` | Where to run |
+| `node-version` | `22` | Node.js version (22.12 or newer) |
+
+Run the other checks as extra steps with different `args`:
+
+```yaml
+      - uses: mishraprayash/ctx-lint@v0
+        with:
+          args: sync --check   # only if you use .context/rules
+      - uses: mishraprayash/ctx-lint@v0
+        with:
+          args: audit
+```
+
+Or call the CLI directly:
+
 ```yaml
 name: Agent instructions
 on:

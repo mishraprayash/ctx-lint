@@ -1,0 +1,41 @@
+name: ctx-lint
+description: Check AI coding agent instruction files (CLAUDE.md, AGENTS.md, Cursor and Copilot rules) for broken paths, scripts and links.
+author: Prayash Mishra
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  args:
+    description: Arguments for ctx-lint. The default checks every instruction file and annotates the pull request.
+    required: false
+    default: check --format github
+  version:
+    description: The ctx-lint version from npm, e.g. 0.1.0. Pin it for reproducible runs.
+    required: false
+    default: latest
+  working-directory:
+    description: Directory to run in (the repository root by default).
+    required: false
+    default: .
+  node-version:
+    description: Node.js version to run ctx-lint with (22.12 or newer).
+    required: false
+    default: '22'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+    - name: Run ctx-lint
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        CTX_LINT_VERSION: ${{ inputs.version }}
+        CTX_LINT_ARGS: ${{ inputs.args }}
+      # The inputs come in through env vars, so nothing in them is run as shell code.
+      run: |
+        read -r -a args <<< "$CTX_LINT_ARGS"
+        npx --yes "ctx-lint@${CTX_LINT_VERSION}" "${args[@]}"

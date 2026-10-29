@@ -777,12 +777,14 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
   - **What's left** is mostly unknowable offline: runtime or build-output paths, folders outside the repo, object-store keys, and paths relative to another package named in the same sentence.
 
 ### Phase 7 — Release v0.1.0
-- [ ] Check the npm name; set `package.json` metadata (`bin`, `exports`, `files`, `engines`, `keywords`, `repository`)
-- [ ] `action.yml`, `.pre-commit-hooks.yaml`, docs for CI
-- [ ] README with GIF, full docs pages
-- [ ] Changesets release workflow with npm provenance
+- [x] Check the npm name (`ctx-lint` was free on 2026-10-29); set `package.json` metadata (`bin`, `exports`, `files`, `engines`, `keywords`, `repository`, `publishConfig` with provenance)
+- [x] `action.yml` (composite: sets up Node 22, runs `npx ctx-lint@<version>`), docs for CI
+- [ ] `.pre-commit-hooks.yaml`: left out for now. pre-commit installs hooks from the git repo, which needs a build step; the documented local hook (`npx ctx-lint check`) works today
+- [ ] README with GIF; [x] full docs pages
+- [x] Release workflow with npm provenance: tag-triggered (`v*`), checks the tag against `package.json`, runs `pnpm verify`, publishes, creates the GitHub release from CHANGELOG.md and moves the `v0` tag (simpler than Changesets for a single package)
 - [ ] (Optional) `bun build --compile` binaries for macOS/Linux/Windows attached to GitHub Releases, plus a Homebrew tap
 - **Done when:** `npx ctx-lint@latest check` works in a fresh repo, and the GitHub Action annotates a PR in a sample repo.
+- **Status (2026-10-29):** ready to publish. What's left needs the maintainer: push to `github.com/mishraprayash/ctx-lint`, add the `NPM_TOKEN` secret, date the changelog entry, then push the `v0.1.0` tag. The Action's run step was tested locally against the demo (annotations, exit 1); the workflow itself first runs on the tag.
 
 ### Later (post-v1 backlog)
 - More ecosystems: `pyproject.toml` (uv/poetry scripts, deps), `Cargo.toml`, `go.mod`, `Taskfile.yml`, `composer.json`
@@ -839,6 +841,7 @@ Each phase is a mergeable PR (or a small set of them) that keeps `main` green.
 | 25 | tsconfig `"*"` aliases are ignored; plain-word aliases (`lib/*`) are tried alongside the path as written | A catch-all alias turned every backticked word into a path (13,888 false diagnostics on PostHog) | 2026-10-17 |
 | 26 | The Phase 6 false-positive target is split: < 10% of errors and < 30% of warnings (was < 2% of all diagnostics) | Errors fail CI, so they need the strict bar; warnings never fail CI. Most remaining false positives (runtime or build-output paths, folders outside the repo) can't be decided offline, and chasing them would cost recall on real stale paths | 2026-10-17 |
 | 27 | Fixing is three steps: `check` finds, `--fix` applies only one-answer fixes and re-checks them (undoing any that didn't clear the problem or caused a new one), and `--format agent` writes a task for a coding agent for the rest. Suggestions are always real, plausible paths (no test data, no unrelated same-name files) | People can't hand-fix 100 findings, and a wrong fix or suggestion is worse than none. Agents handle judgement calls well, and `ctx-lint check` verifies their work | 2026-10-19 |
+| 28 | Releases are tag-triggered from GitHub Actions with npm provenance, not Changesets; no pre-commit hook manifest yet | One package, one maintainer: a tag is the simplest release trigger. A pre-commit manifest would need the hook built from git, which we can't test before publishing | 2026-10-29 |
 
 ## 14. Open Questions (resolve before or during the phase noted)
 1. ~~**Phase 4:** Should Claude scoped rules default to `sections` or `nested` CLAUDE.md files?~~ Resolved: neither. Claude Code supports `.claude/rules/*.md` with `paths`, which is now the default `"rules"` mode (Decision 16).

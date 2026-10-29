@@ -82,3 +82,17 @@ the classifier.
 Manifest parsing lives in `src/manifests/` (`npm.ts`, `make.ts`, `just.ts`) and is reached
 through the `Manifests` class. A new task runner (Taskfile, pyproject scripts…) adds a parser
 there plus a reference kind in `src/parsers/classify/command.ts` and a rule.
+
+## Releasing
+
+Releases are published from GitHub Actions ([release.yml](.github/workflows/release.yml)), with
+npm provenance.
+
+1. Set `version` in `package.json`, and move the `## <version> (unreleased)` notes in
+   [CHANGELOG.md](CHANGELOG.md) to `## <version> (YYYY-MM-DD)`.
+2. Commit, then tag and push: `git tag v0.1.0 && git push origin main v0.1.0`.
+3. The workflow checks that the tag matches `package.json`, runs `pnpm verify`, publishes to npm,
+   creates the GitHub release from the changelog section, and moves the `v0` tag that the
+   GitHub Action's users follow.
+
+It needs an `NPM_TOKEN` repository secret (an npm automation token).
